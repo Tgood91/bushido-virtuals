@@ -88,6 +88,16 @@ Free DexScreener data, no key. It supplies the inputs for the Seykota trend sign
 
 Notes: a token may sit on either side of a pair (the quote-side price is derived). The series file is JSONL, capped at 20,000 lines, and a corrupt line is skipped rather than discarding the file. It lives on local disk, so on an ephemeral runtime it needs a persistent path (`PRICE_SERIES_FILE`). Requests send an honest `User-Agent`. All seven watchlist addresses were read on chain (symbol and decimals) before being listed.
 
+## DefiLlama (`lib/feeds/defillama.js`)
+
+A second, independent source. Also not yet called by the handler.
+
+- **`crossCheck({ dexscreener, defillama, ... })`** fails closed: fewer than two usable prices, or a spread over 1%, means do not size a swap. (The original `spreadPct` returned `null` for one price, which a caller could read as fine.)
+- **`getPrices`** flags `stale` (older than 30 minutes) and `lowConfidence` (under 0.9) instead of passing them through as good.
+- **`scanStableYields`** is information only: it never moves funds. Defaults: Base, USD stables only (a symbol allowlist, because DefiLlama's own `stablecoin` flag also covers EUR and CAD pegs), TVL at least $100k, APY at most 50%, outliers removed. Each row carries `risks` (reward-driven, predicted-down, impermanent-loss, multi-asset). `apyBaseOnly` is the yield without incentive tokens.
+- Why those filters: a plain "top stable APY" scan of live data was led by a 447% pool paid entirely in rewards, and several rows DefiLlama itself marks as outliers.
+- The `/pools` payload covers about 15,000 pools, so it is fetched once per 10 minutes, shared between callers, and only Base rows are kept.
+
 ## Failover numbers
 
 Settings in `FAILOVER_POLICY` (`lib/orchestrator-config.js`). Live execution is not wired, so nothing retries yet; these are the limits to use when it is.
