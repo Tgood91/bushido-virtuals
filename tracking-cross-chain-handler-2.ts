@@ -2,7 +2,7 @@ import type { ExecuteJobResult } from "../../../runtime/offeringTypes.js";
 
 /**
  * Seykota Agent Job: Tracking Cross-Chain Schema
- * cron: "0 */3 * * *"  — Every 3 hours
+ * cron: "0 0,3,6,9,12,15,18,21 * * *"  — Every 3 hours
  *
  * Cross-chain intelligence layer: where is capital flowing BETWEEN chains?
  * Tracks bridge volumes, net flows, TVL momentum differentials, stablecoin

@@ -2,7 +2,7 @@ import type { ExecuteJobResult } from "../../../runtime/offeringTypes.js";
 
 /**
  * Seykota Agent Job: Tracking Fraxtal Chain Volume Schema
- * cron: "*/20 * * * *"  — Every 20 minutes
+ * cron: "0,20,40 * * * *"  — Every 20 minutes
  *
  * Deep volume tracking specific to the Fraxtal chain:
  *   - DEX volume by protocol (Fraxswap, Curve, Uniswap forks)

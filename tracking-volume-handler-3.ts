@@ -2,7 +2,7 @@ import type { ExecuteJobResult } from "../../../runtime/offeringTypes.js";
 
 /**
  * Seykota Agent Job: Tracking Volume Schema
- * cron: "*/15 * * * *"  — Every 15 minutes
+ * cron: "0,15,30,45 * * * *"  — Every 15 minutes
  *
  * Tracks and scores trading volume across tokens, DEXes, and chains.
  * Volume is the single most reliable leading indicator for price moves —

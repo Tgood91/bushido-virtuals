@@ -2,7 +2,7 @@ import type { ExecuteJobResult } from "../../../runtime/offeringTypes.js";
 
 /**
  * Seykota Agent Job: Suggestions Schema
- * cron: "0 */4 * * *"  — Every 4 hours
+ * cron: "0 0,4,8,12,16,20 * * *"  — Every 4 hours
  *
  * Generates actionable trading/farming suggestions based on current
  * market conditions across vol regime, funding, LP health, and chain TVL.
