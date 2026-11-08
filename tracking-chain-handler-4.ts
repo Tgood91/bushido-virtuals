@@ -2,7 +2,7 @@ import type { ExecuteJobResult } from "../../../runtime/offeringTypes.js";
 
 /**
  * Seykota Agent Job: Tracking Chain Schema
- * cron: "0 */4 * * *"  — Every 4 hours
+ * cron: "0 0,4,8,12,16,20 * * *"  — Every 4 hours
  *
  * Tracks full chain-level health metrics: TVL, TVL momentum, active protocols,
  * DEX volume, stablecoin flows, bridge inflows/outflows, and fee revenue.

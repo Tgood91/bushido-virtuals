@@ -2,7 +2,7 @@ import type { ExecuteJobResult } from "../../../runtime/offeringTypes.js";
 
 /**
  * Seykota Agent Job: Tracking Coin Schema
- * cron: "*/30 * * * *"  — Every 30 minutes
+ * cron: "0,30 * * * *"  — Every 30 minutes
  *
  * Deep per-coin tracking: price, momentum, trend score, on-chain activity,
  * social sentiment signals, and vol-farming-specific metrics (IV proxy,

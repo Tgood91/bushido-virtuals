@@ -1,8 +1,18 @@
 import type { ExecuteJobResult } from "../../../runtime/offeringTypes.js";
+import { ROUTER_CONFIG, getRpcConfig, rpcHost } from "./lib/orchestrator-config.js";
+import {
+  loadPolicy,
+  clampMaxSwapPct,
+  effectiveMinAlignment,
+  isAssetAllowed,
+  safeUsd,
+  clampSwapUsd,
+  createDailyCap,
+} from "./lib/orchestrator-policy.js";
 
 /**
  * Swap Orchestrator Agent: Signal Alignment + Auto-Execution via CDP
- * cron: "*/15 * * * *"  — Every 15 minutes
+ * cron: "0,15,30,45 * * * *"  — Every 15 minutes (note: never write the step form of cron inside a block comment: its "star-slash" closes the comment)
  *
  * This agent does NOT generate its own market opinion. It consumes
  * signal output from two upstream agents:
@@ -38,19 +48,18 @@ import type { ExecuteJobResult } from "../../../runtime/offeringTypes.js";
  *   "max_swap_pct": 10,
  *   "dry_run": false   // if true, computes everything but does NOT call CDP
  * }
+ *
+ * SAFETY POLICY (lib/orchestrator-policy.js): a request is untrusted input.
+ *   - Only assets on the server allowlist (ORCHESTRATOR_ALLOWED_ASSETS) are ever traded.
+ *   - max_swap_pct can only LOWER the server ceiling; min_alignment_score can only RAISE the server floor.
+ *   - Every swap is capped by an absolute USD ceiling and a daily cap, whatever equity or balance a request reports.
+ *   - LIVE EXECUTION IS NOT WIRED in this repo: a live (non-dry-run) job fails closed instead of pretending to trade.
  */
 
-const ROUTER_CONFIG = {
-  primary: { name: "PRIMARY_ROUTER", address: "0x111111125421cA6dc452d289314280a0f8842A65", identity: "1inch v5" },
-  fallback_1: { name: "FALLBACK_ROUTER_1", address: "0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae", identity: "LiFi Diamond" },
-  fallback_2: { name: "FALLBACK_ROUTER_2", address: "0x6fF5693b99212Da76ad316178A184AB56D299b43", identity: "0x-style router" },
-};
-
-const RPC_CONFIG = {
-  primary: process.env.COINBASE_RPC || "https://developer-access-mainnet.base.org",
-  fallback_1: process.env.FALLBACK_RPC_1 || "https://1rpc.io/base",
-  fallback_2: process.env.FALLBACK_RPC_2 || "https://base.api.pocket.network",
-};
+// Routers and RPC endpoints live in lib/orchestrator-config.js (verified router identities, working RPC defaults).
+const RPC_CONFIG = getRpcConfig(process.env);
+// In-memory daily spend tracker (resets on restart; use durable storage before running live).
+const dailyCap = createDailyCap({ capUsd: loadPolicy(process.env).dailyCapUsd });
 
 const CDP_API_KEY_NAME = process.env.CDP_API_KEY_NAME || "";
 const CDP_API_KEY_PRIVATE_KEY = process.env.CDP_API_KEY_PRIVATE_KEY || "";
@@ -93,7 +102,7 @@ interface SwapPlan {
   router_attempted: string[];
   router_used: string | null;
   rpc_used: string | null;
-  status: "PLANNED" | "EXECUTED" | "FAILED" | "ABORTED_NO_ALIGNMENT" | "DRY_RUN";
+  status: "PLANNED" | "EXECUTED" | "FAILED" | "ABORTED_NO_ALIGNMENT" | "REJECTED" | "DRY_RUN";
   tx_hash: string | null;
   error: string | null;
 }
@@ -228,68 +237,40 @@ async function executeSwapViaCDP(plan: SwapPlan, dryRun: boolean): Promise<SwapP
     };
   }
 
-  const routerAttempts: Array<keyof typeof ROUTER_CONFIG> = ["primary", "fallback_1", "fallback_2"];
-  const rpcAttempts: Array<keyof typeof RPC_CONFIG> = ["primary", "fallback_1", "fallback_2"];
-
-  for (const routerKey of routerAttempts) {
-    const router = ROUTER_CONFIG[routerKey];
-    plan.router_attempted.push(router.name);
-
-    for (const rpcKey of rpcAttempts) {
-      try {
-        // ── CDP execution placeholder ──────────────────────────────────
-        // Real implementation:
-        //
-        //   import { Coinbase, Wallet } from "@coinbase/coinbase-sdk";
-        //   Coinbase.configure({ apiKeyName: CDP_API_KEY_NAME, privateKey: CDP_API_KEY_PRIVATE_KEY });
-        //   const wallet = await Wallet.fetch(CDP_WALLET_ID);
-        //   const tx = await wallet.createTrade({
-        //     amount: plan.amount_usd,
-        //     fromAssetId: plan.from_token,
-        //     toAssetId: plan.to_token,
-        //     // router address + RPC endpoint passed via custom contract call
-        //     // if CDP native trade doesn't support the asset pair directly
-        //   });
-        //   await tx.wait();
-        //
-        // The orchestrator tries (router × RPC) combinations until one
-        // succeeds. On success, break out of both loops.
-
-        const wouldSucceed = routerKey === "primary" && rpcKey === "primary"; // placeholder logic
-
-        if (wouldSucceed) {
-          return {
-            ...plan,
-            status: "EXECUTED",
-            router_used: router.name,
-            rpc_used: RPC_CONFIG[rpcKey],
-            tx_hash: "0x_PLACEHOLDER_TX_HASH_WIRE_CDP_SDK",
-            error: null,
-          };
-        }
-      } catch (e: any) {
-        // Try next RPC, then next router
-        continue;
-      }
-    }
-  }
-
-  // All router × RPC combinations failed — fail closed
+  // LIVE EXECUTION IS NOT IMPLEMENTED. This used to return status "EXECUTED" with a placeholder transaction hash
+  // whenever credentials were set, which told the buyer a swap had happened when nothing had. Fail closed instead.
+  //
+  // When wiring the real CDP / @coinbase/coinbase-sdk call, follow lib/orchestrator-policy.js `canFailOver`:
+  // fail over to the next router only BEFORE a transaction is broadcast (quote / build / simulate). After
+  // broadcast, keep tracking the original hash (re-sending the same signed transaction to another RPC is safe;
+  // building a new one through a different router could swap twice). Consume the daily cap on success.
   return {
     ...plan,
     status: "FAILED",
-    error: `All routers (${routerAttempts.map(r => ROUTER_CONFIG[r].name).join(", ")}) × all RPCs failed. Fail closed — aborting swap, no retry this cycle.`,
+    error:
+      "Live execution is not implemented in this version, so no trade was made. " +
+      "Use dry_run: true for a plan, or wire the CDP swap call (see swap-orchestrator-handler.ts) before going live.",
   };
 }
 
 // ─── MAIN ────────────────────────────────────────────────────────────────────
 
 export async function executeJob(request: Record<string, any>): Promise<ExecuteJobResult> {
-  const seykotaSignals: SeykotaSignal[] = request.seykota_signals || [];
-  const druckSignals: DruckenmillerSignal[] = request.druckenmiller_signals || [];
-  const portfolio = request.portfolio || { equity_usd: 10000, usdc_balance: 0, existing_positions: {} };
-  const minAlignmentScore = Number(request.min_alignment_score ?? process.env.ORCHESTRATOR_MIN_ALIGNMENT_SCORE ?? 70);
-  const maxSwapPct = Number(request.max_swap_pct ?? process.env.ORCHESTRATOR_MAX_SWAP_PCT ?? 10);
+  // A request is untrusted: anything that is not an array of objects with a string asset is ignored, not crashed on.
+  const cleanSignals = <T extends { asset: string }>(v: unknown): T[] =>
+    Array.isArray(v) ? (v.filter(x => x && typeof x === "object" && typeof (x as any).asset === "string") as T[]) : [];
+  const seykotaSignals: SeykotaSignal[] = cleanSignals<SeykotaSignal>(request.seykota_signals);
+  const druckSignals: DruckenmillerSignal[] = cleanSignals<DruckenmillerSignal>(request.druckenmiller_signals);
+  const rawPortfolio = request.portfolio && typeof request.portfolio === "object" ? request.portfolio : {};
+  const portfolio = {
+    equity_usd: rawPortfolio.equity_usd ?? 10000,
+    usdc_balance: rawPortfolio.usdc_balance ?? 0,
+    existing_positions:
+      rawPortfolio.existing_positions && typeof rawPortfolio.existing_positions === "object" ? rawPortfolio.existing_positions : {},
+  };
+  const policy = loadPolicy(process.env);
+  const minAlignmentScore = effectiveMinAlignment(request.min_alignment_score, policy);
+  const maxSwapPct = clampMaxSwapPct(request.max_swap_pct, policy);
   const dryRun = request.dry_run === true;
 
   // Build asset universe from both signal sets
@@ -302,6 +283,23 @@ export async function executeJob(request: Record<string, any>): Promise<ExecuteJ
   const swapPlans: SwapPlan[] = [];
 
   for (const asset of allAssets) {
+    // Only server-approved assets may be traded: a request cannot name its own token.
+    if (!isAssetAllowed(asset, policy)) {
+      swapPlans.push({
+        asset: String(asset).slice(0, 24),
+        direction: "NEUTRAL",
+        from_token: "USDC",
+        to_token: String(asset).slice(0, 24),
+        amount_usd: 0,
+        router_attempted: [],
+        router_used: null,
+        rpc_used: null,
+        status: "REJECTED",
+        tx_hash: null,
+        error: `Asset is not on the allowlist (${[...policy.allowedAssets].join(", ")}). No trade.`,
+      });
+      continue;
+    }
     const sSig = seykotaSignals.find(s => s.asset === asset);
     const dSig = druckSignals.find(s => s.asset === asset);
     const alignment = computeAlignment(sSig, dSig, asset);
@@ -318,7 +316,7 @@ export async function executeJob(request: Record<string, any>): Promise<ExecuteJ
         direction: "CLOSE",
         from_token: asset,
         to_token: "USDC",
-        amount_usd: existingPos.size_usd || 0,
+        amount_usd: clampSwapUsd(existingPos.size_usd, policy, dailyCap.remaining()),
         router_attempted: [],
         router_used: null,
         rpc_used: null,
@@ -326,7 +324,12 @@ export async function executeJob(request: Record<string, any>): Promise<ExecuteJ
         tx_hash: null,
         error: null,
       };
+      if (plan.amount_usd <= 0) {
+        swapPlans.push({ ...plan, status: "ABORTED_NO_ALIGNMENT", error: "Close amount is $0 after the safety caps (or no recorded position size)." });
+        continue;
+      }
       const executed = await executeSwapViaCDP(plan, dryRun);
+      if (executed.status === "EXECUTED") dailyCap.consume(executed.amount_usd);
       swapPlans.push(executed);
       continue;
     }
@@ -350,21 +353,23 @@ export async function executeJob(request: Record<string, any>): Promise<ExecuteJ
     }
 
     // Compute swap size — capped by maxSwapPct of equity
-    const maxSwapUsd = (portfolio.equity_usd || 0) * (maxSwapPct / 100);
-    const availableUsdc = portfolio.usdc_balance || 0;
+    // Equity and balances come from the request, so they are only a SIZING HINT: the absolute per-swap ceiling and
+    // the daily cap in clampSwapUsd below bound the damage whatever a request reports.
+    const maxSwapUsd = safeUsd(portfolio.equity_usd) * (maxSwapPct / 100);
+    const availableUsdc = safeUsd(portfolio.usdc_balance);
 
     let amountUsd: number;
     let fromToken: string;
     let toToken: string;
 
     if (alignment.combined_action === "EXECUTE_LONG") {
-      amountUsd = Math.min(maxSwapUsd, availableUsdc);
+      amountUsd = clampSwapUsd(Math.min(maxSwapUsd, availableUsdc), policy, dailyCap.remaining());
       fromToken = "USDC";
       toToken = asset;
     } else {
       // EXECUTE_SHORT — assumes existing long position to unwind, or perp short via separate venue
       const existingPos = portfolio.existing_positions?.[asset];
-      amountUsd = Math.min(maxSwapUsd, existingPos?.size_usd || 0);
+      amountUsd = clampSwapUsd(Math.min(maxSwapUsd, safeUsd(existingPos?.size_usd)), policy, dailyCap.remaining());
       fromToken = asset;
       toToken = "USDC";
     }
@@ -401,12 +406,14 @@ export async function executeJob(request: Record<string, any>): Promise<ExecuteJ
     };
 
     const executed = await executeSwapViaCDP(plan, dryRun);
+    if (executed.status === "EXECUTED") dailyCap.consume(executed.amount_usd);
     swapPlans.push(executed);
   }
 
   const executedSwaps = swapPlans.filter(p => p.status === "EXECUTED");
   const failedSwaps = swapPlans.filter(p => p.status === "FAILED");
   const abortedSwaps = swapPlans.filter(p => p.status === "ABORTED_NO_ALIGNMENT");
+  const rejectedSwaps = swapPlans.filter(p => p.status === "REJECTED");
   const noTradeAssets = alignments.filter(a => a.combined_action === "NO_TRADE");
 
   const summary =
@@ -414,6 +421,7 @@ export async function executeJob(request: Record<string, any>): Promise<ExecuteJ
     `${executedSwaps.length} swap(s) executed${dryRun ? " (DRY RUN)" : ""}. ` +
     `${failedSwaps.length} failed (router/RPC exhausted). ` +
     `${abortedSwaps.length} aborted (below alignment threshold). ` +
+    `${rejectedSwaps.length} rejected (asset not on the allowlist). ` +
     `${noTradeAssets.length} no-trade (signal conflict or insufficient data).`;
 
   return {
@@ -425,14 +433,18 @@ export async function executeJob(request: Record<string, any>): Promise<ExecuteJ
       config: {
         min_alignment_score: minAlignmentScore,
         max_swap_pct: maxSwapPct,
-        router_failover_order: Object.values(ROUTER_CONFIG).map(r => r.name),
-        rpc_failover_order: ["COINBASE_RPC", "FALLBACK_RPC_1", "FALLBACK_RPC_2"],
+        max_swap_usd: policy.maxSwapUsd,
+        daily_cap_remaining_usd: dailyCap.remaining(),
+        allowed_assets: [...policy.allowedAssets],
+        router_failover_order: Object.values(ROUTER_CONFIG).map(r => `${r.name} (${r.identity})`),
+        rpc_failover_order: ["COINBASE_RPC", "FALLBACK_RPC_1", "FALLBACK_RPC_2"].map((n, i) => `${n}: ${rpcHost(Object.values(RPC_CONFIG)[i])}`),
       },
       alignments,
       swap_plans: swapPlans,
       executed_count: executedSwaps.length,
       failed_count: failedSwaps.length,
       aborted_count: abortedSwaps.length,
+      rejected_count: rejectedSwaps.length,
     }),
   };
 }
