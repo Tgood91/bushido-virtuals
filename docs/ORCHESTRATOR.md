@@ -53,12 +53,7 @@ A job request is untrusted. The server's environment sets the limits:
 | `ORCHESTRATOR_MIN_ALIGNMENT_SCORE` | 70 | Floor. A request can only raise it |
 | `ORCHESTRATOR_DAILY_CAP_USD` | 250 | Total per UTC day (in memory; use durable storage before going live) |
 
-## Using it in an ACP runtime
-
-Copy the handler together with `lib/` into the offering folder. The `../../../runtime/offeringTypes.js` import is type-only
-and is erased at run time. Node 22.18+ runs the `.ts` file directly.
-
-A reasonable first offering is **signals only** (`dry_run: true`): it sells the alignment analysis without holding keys.
+ACP marketplace notes are parked in [ACP.md](ACP.md).
 
 ## Tests
 
