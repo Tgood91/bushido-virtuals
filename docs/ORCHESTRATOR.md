@@ -86,7 +86,7 @@ Free DexScreener data, no key. It supplies the inputs for the Seykota trend sign
 | `checkLiquidity` | Floor ($100k default) and trade share of the pool (1% default). Unknown liquidity means no |
 | `priceAgreement` | The router quote must be within a tolerance (100 bps) of the feed price. The feed is a hint, never the trade price |
 
-Notes: a token may sit on either side of a pair (the quote-side price is derived). The series file is JSONL, capped at 20,000 lines, and a corrupt line is skipped rather than discarding the file. It lives on local disk, so on an ephemeral runtime it needs a persistent path (`PRICE_SERIES_FILE`). Requests send an honest `User-Agent`. All seven watchlist addresses were read on chain (symbol and decimals) before being listed.
+Notes: a token may sit on either side of a pair (the quote-side price is derived). The price series is kept **in memory** (capped at 20,000 rows) and resets on restart, so the trend score is `null` again until enough history has built up. To persist it, set `PRICE_SERIES_FILE` (JSONL; a corrupt line is skipped rather than discarding the file; on an ephemeral runtime it needs a persistent path). Requests send an honest `User-Agent`. All seven watchlist addresses were read on chain (symbol and decimals) before being listed.
 
 ## DefiLlama (`lib/feeds/defillama.js`)
 

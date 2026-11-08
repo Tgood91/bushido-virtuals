@@ -132,3 +132,18 @@ test("poll cycle: stables get a peg check, VIRTUAL gets a trend and a Seykota sc
   assert.equal(out.VIRTUAL.seykotaScore, null);
   assert.equal(out.DAI, null);
 });
+
+test("the series is in memory by default and writes no file", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nofile-"));
+  const cwd = process.cwd();
+  process.chdir(dir);
+  try {
+    const feed = createFeed({ now: () => Date.parse("2026-11-09T00:00:00Z") });
+    feed.appendSeries({ [V]: { symbol: "V", address: V, priceUsd: 1, at: "2026-11-08T00:00:00Z" } });
+    assert.deepEqual(feed.readSeries(V), [1]);
+    assert.deepEqual(fs.readdirSync(dir), []); // nothing written
+    assert.equal(feed.seriesFile, null);
+  } finally {
+    process.chdir(cwd);
+  }
+});

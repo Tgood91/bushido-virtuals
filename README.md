@@ -4,7 +4,7 @@ Job handlers and supporting material for the Bushido trading agents: a Seykota-s
 macro agent, market trackers, and a swap orchestrator that combines the two agents' signals into a capped swap plan.
 
 > **Status in one paragraph.** The swap orchestrator is the only part with a safety layer and tests (`lib/`, `test/`,
-> 69 tests, CI). The execution state machine is built and tested with fake adapters, but the **concrete adapters (router quotes, wallet
+> 70 tests, CI). The execution state machine is built and tested with fake adapters, but the **concrete adapters (router quotes, wallet
 > signing) are not written**, so a live job still fails closed and only a **dry-run plan** is produced. The other handlers are market-data and persona jobs kept as they were written; they
 > parse (checked in CI) but their data sources have not been exercised here. Anything that moves money, such as the
 > dip-buy and micro-swap examples, is reference material, not a finished product.
@@ -27,7 +27,7 @@ macro agent, market trackers, and a swap orchestrator that combines the two agen
 Requires **Node 22.18 or newer**. No dependencies to install: Node strips the TypeScript types itself.
 
 ```bash
-npm test                                  # 69 tests, offline, a few seconds
+npm test                                  # 70 tests, offline, a few seconds
 node --input-type=module -e '
   const { executeJob } = await import("./swap-orchestrator-handler.ts");
   const out = await executeJob({
