@@ -41,3 +41,11 @@ test("rpcHost keeps the host only: an API key in the path or query never reaches
   assert.equal(rpcHost("https://rpc.example/path?apikey=SECRET"), "rpc.example");
   assert.equal(rpcHost("not a url"), "invalid-url");
 });
+
+test("failover policy: one retry per router, bounded timeouts, abort and alert when everything fails", async () => {
+  const { FAILOVER_POLICY } = await import("../lib/orchestrator-config.js");
+  assert.deepEqual(FAILOVER_POLICY.router, { maxRetriesPerRouter: 1, timeoutMs: 8000, maxSlippageBps: 100, onAllFailed: "abort_and_alert" });
+  assert.equal(FAILOVER_POLICY.rpc.unhealthyAfterConsecutiveFailures, 2);
+  assert.equal(FAILOVER_POLICY.rpc.healthCheckIntervalSeconds, 30);
+  assert.equal(FAILOVER_POLICY.rpc.onAllFailed, "abort_and_alert");
+});

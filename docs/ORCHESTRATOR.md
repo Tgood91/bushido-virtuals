@@ -58,3 +58,15 @@ ACP marketplace notes are parked in [ACP.md](ACP.md).
 ## Tests
 
 `npm test` (Node 22.18+). Covers policy, config, the handler end to end, and a syntax check of every `.ts` file.
+
+## Failover numbers
+
+Settings in `FAILOVER_POLICY` (`lib/orchestrator-config.js`). Live execution is not wired, so nothing retries yet; these are the limits to use when it is.
+
+| | Value |
+|---|---|
+| Retries per router | 1 |
+| Router timeout | 8000 ms |
+| Max slippage | 100 bps (a request can only tighten it: `clampSlippageBps`) |
+| RPC health check | every 30 s, timeout 5000 ms, unhealthy after 2 consecutive failures |
+| Every router or RPC failed | abort and alert (never trade) |

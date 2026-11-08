@@ -102,3 +102,12 @@ test("daily cap: spends down, ignores junk, and resets at UTC midnight", () => {
   t = Date.parse("2026-11-09T00:01:00Z");
   assert.equal(cap.remaining(), 100); // a new day
 });
+
+test("slippage: a request can only be tighter than the ceiling", async () => {
+  const { clampSlippageBps } = await import("../lib/orchestrator-policy.js");
+  assert.equal(clampSlippageBps(undefined, 100), 100);
+  assert.equal(clampSlippageBps(500, 100), 100); // the attack: allow more slippage
+  assert.equal(clampSlippageBps(30, 100), 30);
+  assert.equal(clampSlippageBps(-5, 100), 100);
+  assert.equal(clampSlippageBps("x", 100), 100);
+});
