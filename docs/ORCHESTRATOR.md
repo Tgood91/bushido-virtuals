@@ -16,9 +16,23 @@ Druckenmiller ───┘
 | Signal normalisation and alignment scoring | Implemented, tested |
 | Safety policy (allowlist, per-swap and daily caps, request can only tighten limits) | Implemented, tested |
 | Router and RPC configuration | Implemented, tested |
-| **Live execution through a CDP wallet** | **Not implemented.** A live job returns `FAILED` ("not implemented"); only `dry_run: true` produces a plan. |
+| Execution state machine (`lib/orchestrator-exec.js`): simulate before sign, failover only before broadcast, one broadcast, spend recorded first | Implemented, tested with fake adapters |
+| Verified Base token table (USDC, WETH, cbBTC) | Implemented; symbol and decimals read on chain |
+| **Concrete adapters** (`lib/orchestrator-live.js`): router quotes, signing from the CDP wallet, receipts | **Not written.** Returns `null`, so a live job fails closed |
 
 An earlier version returned `EXECUTED` with a placeholder hash. That was removed so a buyer is never told a swap happened when none did.
+
+## Going live: what is left
+
+Live mode needs `ORCHESTRATOR_LIVE=true` **and** `createLiveAdapters` to return adapters. Each adapter set (one per router) supplies `quote`, `build`, `simulate`, `broadcast`, `confirm`; the state machine does the rest:
+
+1. Re-clamp the amount to the per-swap ceiling and what is left of today's cap.
+2. For each router in order (1 retry each, 8 s timeout): quote, build, simulate. A revert or error moves on to the next router. If all fail: abort, nothing spent.
+3. Record the spend, then broadcast **once**. No failover after this point.
+4. A broadcast error is an unknown outcome: `FAILED`, spend stays recorded, no retry.
+5. Confirm the original hash: `EXECUTED`, `FAILED` (reverted) or `PENDING` (keep tracking that hash).
+
+Selling a non-USDC token needs an explicit USD price from the adapters; a missing price is never assumed to be $1. Before pointing this at real funds, use a fresh burner wallet with a small balance (the same pattern as the dApp's faucet), keep the keys in the runtime environment only, and run the adapters against a fork or tiny amounts first.
 
 ## Routers (failover order)
 

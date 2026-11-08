@@ -50,13 +50,15 @@ test("a missing signal means no trade", async () => {
   assert.equal(d.alignments[0].combined_action, "NO_TRADE");
 });
 
-test("live mode without credentials fails closed", async () => {
+test("live mode is off unless switched on, and fails closed", async () => {
   const d = await run({ ...strong(), portfolio: { equity_usd: 10000, usdc_balance: 2500 } });
   assert.equal(d.swap_plans[0].status, "FAILED");
+  assert.match(d.swap_plans[0].error, /switched off/);
   assert.equal(d.executed_count, 0);
 });
 
 test("live mode with credentials still fails closed: no fake success, no placeholder", async () => {
+  process.env.ORCHESTRATOR_LIVE = "true";
   process.env.CDP_API_KEY_NAME = "x";
   process.env.CDP_API_KEY_PRIVATE_KEY = "x";
   process.env.CDP_WALLET_ID = "x";
@@ -67,7 +69,7 @@ test("live mode with credentials still fails closed: no fake success, no placeho
   assert.match(d.swap_plans[0].error, /not implemented/);
   assert.doesNotMatch(out, /PLACEHOLDER/i);
   assert.equal(d.executed_count, 0);
-  for (const k of ["CDP_API_KEY_NAME", "CDP_API_KEY_PRIVATE_KEY", "CDP_WALLET_ID"]) delete process.env[k];
+  for (const k of ["ORCHESTRATOR_LIVE", "CDP_API_KEY_NAME", "CDP_API_KEY_PRIVATE_KEY", "CDP_WALLET_ID"]) delete process.env[k];
 });
 
 test("garbage requests do not crash", async () => {
