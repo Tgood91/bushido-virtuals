@@ -4,7 +4,7 @@ Job handlers and supporting material for the Bushido trading agents: a Seykota-s
 macro agent, market trackers, and a swap orchestrator that combines the two agents' signals into a capped swap plan.
 
 > **Status in one paragraph.** The swap orchestrator is the only part with a safety layer and tests (`lib/`, `test/`,
-> 49 tests, CI). The execution state machine is built and tested with fake adapters, but the **concrete adapters (router quotes, wallet
+> 61 tests, CI). The execution state machine is built and tested with fake adapters, but the **concrete adapters (router quotes, wallet
 > signing) are not written**, so a live job still fails closed and only a **dry-run plan** is produced. The other handlers are market-data and persona jobs kept as they were written; they
 > parse (checked in CI) but their data sources have not been exercised here. Anything that moves money, such as the
 > dip-buy and micro-swap examples, is reference material, not a finished product.
@@ -27,7 +27,7 @@ macro agent, market trackers, and a swap orchestrator that combines the two agen
 Requires **Node 22.18 or newer**. No dependencies to install: Node strips the TypeScript types itself.
 
 ```bash
-npm test                                  # 49 tests, offline, a few seconds
+npm test                                  # 61 tests, offline, a few seconds
 node --input-type=module -e '
   const { executeJob } = await import("./swap-orchestrator-handler.ts");
   const out = await executeJob({
@@ -189,6 +189,7 @@ a test. GitHub Actions runs the same command on Node 22 for every push and pull 
 | `test/policy.test.js` | allowlist, clamps (a request can only tighten), daily cap and UTC rollover, failover stages |
 | `test/config.test.js` | router order and identities, RPC defaults and overrides, host-only logging, failover numbers |
 | `test/exec.test.js` | the execution state machine with fake adapters: simulate-before-sign, failover only before broadcast, one broadcast, cap enforced and recorded first, unknown outcomes |
+| `test/feed.test.js` | the DexScreener feed with a fake `fetch`: pair choice, either token side, time-bucketed series, trend and Seykota mapping, peg, liquidity and price-agreement checks |
 | `test/orchestrator.test.js` | the handler end to end: hostile requests stay inside the caps, unlisted assets are rejected, live mode fails closed |
 | `test/syntax.test.js` | every root and `examples/` `.ts` file parses. A cron comment like `*/15` inside a block comment once broke eight files |
 
@@ -199,6 +200,7 @@ swap-orchestrator-handler.ts     the orchestrator
 lib/orchestrator-config.js       routers, RPCs, failover numbers, host-only logging
 lib/orchestrator-policy.js       limits, clamps, daily cap, failover rule
 lib/orchestrator-exec.js         execution state machine (adapters injected)
+lib/feeds/dexscreener.js         price feed, trend score, peg and liquidity checks (not yet wired into the handler)
 lib/orchestrator-live.js         concrete adapters: not written yet (returns null)
 *-handler-*.ts                   the other jobs (table above)
 examples/                        integration examples that are not handlers

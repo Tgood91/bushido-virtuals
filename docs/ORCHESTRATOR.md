@@ -73,6 +73,21 @@ ACP marketplace notes are parked in [ACP.md](ACP.md).
 
 `npm test` (Node 22.18+). Covers policy, config, the handler end to end, and a syntax check of every `.ts` file.
 
+## Price feed (`lib/feeds/dexscreener.js`)
+
+Free DexScreener data, no key. It supplies the inputs for the Seykota trend signal and the pre-trade checks. It is **not yet called by the handler**: the handler still takes signals from the request.
+
+| Function | Purpose |
+|---|---|
+| `createFeed({...}).pollWatchlist()` | Snapshot the watchlist, append to the series, return per-token results |
+| `bucketSeries`, `trendScore` | Trend from a **time-bucketed** series (15 minute buckets), so uneven polling does not distort it. `null` until 28 buckets exist |
+| `trendToSeykotaScore` | Maps the 0 to 100 trend onto the handler's -7..+7 scale. No data gives no signal (`null`) |
+| `pegDeviationBps` | For USDC, USDT, DAI and USDbC only (CADC and EURC track other currencies) |
+| `checkLiquidity` | Floor ($100k default) and trade share of the pool (1% default). Unknown liquidity means no |
+| `priceAgreement` | The router quote must be within a tolerance (100 bps) of the feed price. The feed is a hint, never the trade price |
+
+Notes: a token may sit on either side of a pair (the quote-side price is derived). The series file is JSONL, capped at 20,000 lines, and a corrupt line is skipped rather than discarding the file. It lives on local disk, so on an ephemeral runtime it needs a persistent path (`PRICE_SERIES_FILE`). Requests send an honest `User-Agent`. All seven watchlist addresses were read on chain (symbol and decimals) before being listed.
+
 ## Failover numbers
 
 Settings in `FAILOVER_POLICY` (`lib/orchestrator-config.js`). Live execution is not wired, so nothing retries yet; these are the limits to use when it is.
