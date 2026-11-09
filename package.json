@@ -4,7 +4,7 @@
   "type": "module",
   "description": "Bushido ACP agent handlers, the swap orchestrator safety layer, and a read-only 0xSplits client for Base",
   "engines": {
-    "node": ">=22.18"
+    "node": ">=22"
   },
   "scripts": {
     "test": "node --test \"test/*.test.js\"",

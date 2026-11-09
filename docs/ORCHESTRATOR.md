@@ -66,7 +66,7 @@ ACP marketplace notes are parked in [ACP.md](ACP.md).
 
 ## Tests
 
-`npm test` (Node 22.18+). Covers policy, config, the handler end to end, and a syntax check of every `.ts` file.
+`npm test` (Node 22+). Covers policy, config, the handler end to end, and a syntax check of every `.js` file.
 
 ## Failover numbers
 

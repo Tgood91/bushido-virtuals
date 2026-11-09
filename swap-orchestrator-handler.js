@@ -267,7 +267,7 @@ async function executeSwapViaCDP(plan, dryRun) {
     status: "FAILED",
     error:
       "Live execution is not implemented in this version, so no trade was made. " +
-      "Use dry_run: true for a plan, or wire the CDP swap call (see swap-orchestrator-handler.ts) before going live.",
+      "Use dry_run: true for a plan, or wire the CDP swap call (see swap-orchestrator-handler.js) before going live.",
   };
 }
 

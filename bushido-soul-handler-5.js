@@ -1,4 +1,3 @@
-import type { ExecuteJobResult } from "../../../runtime/offeringTypes.js";
 
 /**
  * Seykota Agent Job: Bushido Soul Schema
@@ -49,17 +48,18 @@ import type { ExecuteJobResult } from "../../../runtime/offeringTypes.js";
 
 // ─── BUSHIDO VIRTUES ─────────────────────────────────────────────────────────
 
-interface Virtue {
-  kanji: string;
-  romaji: string;
-  english: string;
-  trading_principle: string;
-  questions: string[];
-  violations: string[];
-  affirmations: string[];
-}
+/**
+ * @typedef {object} Virtue
+ * @property {string} kanji
+ * @property {string} romaji
+ * @property {string} english
+ * @property {string} trading_principle
+ * @property {string[]} questions
+ * @property {string[]} violations
+ * @property {string[]} affirmations
+ */
 
-const BUSHIDO_VIRTUES: Virtue[] = [
+const BUSHIDO_VIRTUES = [
   {
     kanji: "義",
     romaji: "GI",
@@ -225,27 +225,29 @@ const BUSHIDO_VIRTUES: Virtue[] = [
 
 // ─── BEHAVIORAL AUDIT ENGINE ─────────────────────────────────────────────────
 
-interface VirtueScore {
-  kanji: string;
-  romaji: string;
-  english: string;
-  score: number;           // 0–10
-  grade: "MASTER" | "DISCIPLINED" | "LEARNING" | "STRUGGLING" | "VIOLATED";
-  flags: string[];         // specific violations detected
-  guidance: string;        // what to do next cycle
-}
+/**
+ * @typedef {object} VirtueScore
+ * @property {string} kanji
+ * @property {string} romaji
+ * @property {string} english
+ * @property {number} score  0–10
+ * @property {"MASTER" | "DISCIPLINED" | "LEARNING" | "STRUGGLING" | "VIOLATED"} grade
+ * @property {string[]} flags  specific violations detected
+ * @property {string} guidance  what to do next cycle
+ */
 
-interface BushidoAudit {
-  cycle_number: number;
-  overall_score: number;       // 0–100
-  overall_grade: string;
-  soul_status: "ALIGNED" | "DRIFTING" | "COMPROMISED" | "BROKEN";
-  virtue_scores: VirtueScore[];
-  critical_violations: string[];
-  commendations: string[];
-  daily_mandate: string;       // one clear instruction for the next cycle
-  closing_reflection: string;  // Bushido wisdom for the day
-}
+/**
+ * @typedef {object} BushidoAudit
+ * @property {number} cycle_number
+ * @property {number} overall_score  0–100
+ * @property {string} overall_grade
+ * @property {"ALIGNED" | "DRIFTING" | "COMPROMISED" | "BROKEN"} soul_status
+ * @property {VirtueScore[]} virtue_scores
+ * @property {string[]} critical_violations
+ * @property {string[]} commendations
+ * @property {string} daily_mandate  one clear instruction for the next cycle
+ * @property {string} closing_reflection  Bushido wisdom for the day
+ */
 
 const CLOSING_REFLECTIONS = [
   "The way of the samurai is found in death. Approach each trade as if it were your last — complete, decisive, and without regret. — Yamamoto Tsunetomo",
@@ -266,17 +268,17 @@ const CLOSING_REFLECTIONS = [
 ];
 
 function scoreVirtue(
-  virtue: Virtue,
-  request: Record<string, any>,
-  index: number
-): VirtueScore {
-  const flags: string[] = [];
+  virtue,
+  request,
+  index
+) {
+  const flags = [];
   let score = 10;
 
   const drawdownPct = Number(request.drawdown_pct || 0);
   const overrides = Number(request.overrides_this_week || 0);
   const consecutiveLosses = Number(request.consecutive_losses || 0);
-  const recentActions: Array<{ action: string; cycle: number }> =
+  const recentActions =
     request.recent_actions || [];
   const equity = Number(request.account_equity || 10000);
   const hwm = Number(request.high_water_mark || equity);
@@ -401,7 +403,7 @@ function scoreVirtue(
 
   score = Math.max(0, Math.min(10, score));
 
-  const grade: VirtueScore["grade"] =
+  const grade =
     score >= 9
       ? "MASTER"
       : score >= 7
@@ -412,7 +414,7 @@ function scoreVirtue(
       ? "STRUGGLING"
       : "VIOLATED";
 
-  const guidanceMap: Record<VirtueScore["grade"], string> = {
+  const guidanceMap = {
     MASTER: `${virtue.romaji} is strong. Maintain this standard and let it anchor the other virtues.`,
     DISCIPLINED: `${virtue.romaji} is solid. One area of attention: ${flags[0] || "maintain current practice"}.`,
     LEARNING: `${virtue.romaji} needs attention. Review violations and apply corrections next cycle before opening positions.`,
@@ -432,9 +434,9 @@ function scoreVirtue(
 }
 
 function buildDailyMandate(
-  scores: VirtueScore[],
-  request: Record<string, any>
-): string {
+  scores,
+  request
+) {
   const violated = scores.filter((s) => s.grade === "VIOLATED");
   const struggling = scores.filter((s) => s.grade === "STRUGGLING");
   const drawdownPct = Number(request.drawdown_pct || 0);
@@ -458,15 +460,15 @@ function buildDailyMandate(
 // ─── MAIN ────────────────────────────────────────────────────────────────────
 
 export async function executeJob(
-  request: Record<string, any>
-): Promise<ExecuteJobResult> {
+  request
+) {
   const cycleNumber = Number(request.cycle_number || 1);
   const equity = Number(request.account_equity || 10000);
   const hwm = Number(request.high_water_mark || equity);
   const drawdownPct = Number(request.drawdown_pct || ((hwm - equity) / hwm) * 100);
 
   // ── Score all seven virtues ──
-  const virtueScores: VirtueScore[] = BUSHIDO_VIRTUES.map((v, i) =>
+  const virtueScores = BUSHIDO_VIRTUES.map((v, i) =>
     scoreVirtue(v, request, i)
   );
 
@@ -485,7 +487,7 @@ export async function executeJob(
       ? "見習い MINARAI — Apprentice"
       : "浪人 RONIN — Masterless (system abandoned)";
 
-  const soulStatus: BushidoAudit["soul_status"] =
+  const soulStatus =
     overallScore >= 80
       ? "ALIGNED"
       : overallScore >= 60
@@ -528,7 +530,7 @@ export async function executeJob(
     })),
   };
 
-  const audit: BushidoAudit = {
+  const audit = {
     cycle_number: cycleNumber,
     overall_score: overallScore,
     overall_grade: overallGrade,

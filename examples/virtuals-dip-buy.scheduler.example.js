@@ -1,5 +1,5 @@
 // EXAMPLE ONLY (not run by anything in this repo). It shows how to register the dip-buy job with a scheduler.
-// It used to sit at the bottom of virtuals-dip-buy.config.ts, where it imported the config's own name from the same
+// It used to sit at the bottom of virtuals-dip-buy.config.js, where it imported the config's own name from the same
 // file: a duplicate-declaration error that stopped the config from loading. The import paths below assume the ACP
 // runtime's layout (jobs/ and handlers/ folders); adjust them to where you copy the config and the handler.
 
