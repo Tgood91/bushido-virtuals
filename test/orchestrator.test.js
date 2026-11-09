@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-const { executeJob } = await import("../swap-orchestrator-handler.ts");
+const { executeJob } = await import("../swap-orchestrator-handler.js");
 
 const strong = (asset = "ETH") => ({
   seykota_signals: [{ asset, score: 7, action: "LONG" }],
@@ -60,7 +60,7 @@ test("live mode with credentials still fails closed: no fake success, no placeho
   process.env.CDP_API_KEY_NAME = "x";
   process.env.CDP_API_KEY_PRIVATE_KEY = "x";
   process.env.CDP_WALLET_ID = "x";
-  const m = await import("../swap-orchestrator-handler.ts?live");
+  const m = await import("../swap-orchestrator-handler.js?live");
   const out = (await m.executeJob({ ...strong(), portfolio: { equity_usd: 10000, usdc_balance: 2500 } })).deliverable;
   const d = JSON.parse(out);
   assert.equal(d.swap_plans[0].status, "FAILED");
@@ -75,4 +75,34 @@ test("garbage requests do not crash", async () => {
     const d = await run(req);
     assert.equal(d.swap_plans.length, 0);
   }
+});
+
+test("nodle_micro_swaps: dry run adds a 0.05 USDC -> ETH plan tagged with its source", async () => {
+  const d = await run({ portfolio: { usdc_balance: 5 }, nodle_micro_swaps: { enabled: true, runs_today: 0 }, dry_run: true });
+  assert.equal(d.nodle_micro_swaps.run, true);
+  const p = d.swap_plans.find((x) => x.source === "nodle_micro_swaps");
+  assert.equal(p.status, "DRY_RUN");
+  assert.equal(p.amount_usd, 0.05);
+  assert.equal(p.to_token, "ETH");
+});
+
+test("nodle_micro_swaps: skipped when the agents close ETH, and USDC committed to aligned buys is not reused", async () => {
+  const closing = await run({
+    seykota_signals: [{ asset: "ETH", score: 0, action: "CLOSE" }],
+    druckenmiller_signals: [{ asset: "ETH", fundamental_signal: "HOLD", action: "HOLD" }],
+    portfolio: { usdc_balance: 5 },
+    nodle_micro_swaps: { enabled: true },
+    dry_run: true,
+  });
+  assert.equal(closing.nodle_micro_swaps.run, false);
+  const spent = await run({ ...strong(), portfolio: { equity_usd: 10000, usdc_balance: 100 }, nodle_micro_swaps: { enabled: true }, dry_run: true });
+  assert.equal(spent.nodle_micro_swaps.run, false); // the $100 aligned buy uses all the USDC
+});
+
+test("deliverable lists the Base contracts and the monitoring WSS host; off by default", async () => {
+  const d = await run({ ...strong(), portfolio: { equity_usd: 10000, usdc_balance: 2500 }, dry_run: true });
+  assert.equal(d.config.contracts.weth9, "0x4200000000000000000000000000000000000006");
+  assert.equal(d.config.monitoring_wss, "base.gateway.tenderly.co");
+  assert.equal(d.nodle_micro_swaps, null);
+  assert.equal(d.preflight, null);
 });

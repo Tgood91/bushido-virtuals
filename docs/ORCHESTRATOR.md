@@ -1,12 +1,12 @@
 # Swap Orchestrator
 
 Combines a Seykota (trend) signal and a Druckenmiller (macro/fundamental) signal per asset, scores their agreement, and
-plans a swap on Base. Handler: `swap-orchestrator-handler.ts`. Config and safety rules: `lib/`.
+plans a swap on Base. Handler: `swap-orchestrator-handler.js`. Config and safety rules: `lib/`.
 
 ```
-Seykota signals ─┐
+Seykota signals ─┐                        (optional sequencer pre-flight)
                  ├─> alignment engine ─> policy (allowlist, caps) ─> swap plan ─> [execution: NOT WIRED]
-Druckenmiller ───┘
+Druckenmiller ───┘                         + nodle_micro-swaps ─┘
 ```
 
 ## What is implemented, and what is not
@@ -32,8 +32,17 @@ Names are the contract names on the verified Basescan source (checked 2026-11-08
 
 ## RPC endpoints (failover order)
 
-Defaults: `https://mainnet.base.org`, `https://base.drpc.org`, `https://base.api.pocket.network`. The earlier defaults
-(`developer-access-mainnet.base.org`, `1rpc.io/base`) did not work. Override with `COINBASE_RPC`, `FALLBACK_RPC_1`, `FALLBACK_RPC_2`.
+Defaults: `https://mainnet.base.org`, `https://1rpc.io/base`, `https://base.api.pocket.network`. `developer-access-mainnet.base.org`
+still does not connect (2026-11-09). `1rpc.io/base` hits its free-plan usage limit quickly; `https://base.drpc.org` is a
+good `FALLBACK_RPC_1` override. Override with `COINBASE_RPC`, `FALLBACK_RPC_1`, `FALLBACK_RPC_2`; monitoring WebSocket with
+`TENDERLY_WSS` (default `wss://base.gateway.tenderly.co`). Contract addresses: `lib/base-contracts.js`.
+
+## Pre-flight and sub-functions
+
+- `"preflight": true`: reads the Chainlink sequencer uptime feed through the RPC chain; down, under 1 h since restart,
+  or all RPCs failing means no swaps are planned (`lib/chain-guards.js`).
+- `"nodle_micro_swaps": { "enabled": true }`: adds a 0.05 USDC → ETH plan under the same policy (`lib/nodle-micro-swaps.js`).
+- Read-only Splits client: `lib/splits.js`. Live check: `npm run check:base`.
 URLs can carry API keys, so only the host is ever written to a deliverable.
 
 ## Failover rule
@@ -57,7 +66,7 @@ ACP marketplace notes are parked in [ACP.md](ACP.md).
 
 ## Tests
 
-`npm test` (Node 22.18+). Covers policy, config, the handler end to end, and a syntax check of every `.ts` file.
+`npm test` (Node 22+). Covers policy, config, the handler end to end, and a syntax check of every `.js` file.
 
 ## Failover numbers
 

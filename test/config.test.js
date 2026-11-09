@@ -20,13 +20,12 @@ test("router identities are the contract names verified on Basescan (the old lab
   assert.doesNotMatch(Object.values(ROUTER_CONFIG).map((r) => r.identity).join(" "), /v5|0x-style/i);
 });
 
-test("default RPCs are https, distinct, and are not the two dead endpoints from the old config", () => {
+test("default RPCs are https, distinct, in the agreed order, and not the dead developer-access endpoint", () => {
   const urls = Object.values(DEFAULT_RPCS);
   assert.equal(new Set(urls).size, 3);
   for (const u of urls) assert.ok(u.startsWith("https://"), u);
-  const joined = urls.join(" ");
-  assert.doesNotMatch(joined, /developer-access-mainnet\.base\.org/); // no longer resolves
-  assert.doesNotMatch(joined, /1rpc\.io/); // failed when checked
+  assert.deepEqual(urls, ["https://mainnet.base.org", "https://1rpc.io/base", "https://base.api.pocket.network"]);
+  assert.doesNotMatch(urls.join(" "), /developer-access-mainnet\.base\.org/); // still does not connect (2026-11-09)
 });
 
 test("environment variables override the RPC defaults, one by one", () => {

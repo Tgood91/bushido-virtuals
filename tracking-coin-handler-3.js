@@ -1,4 +1,3 @@
-import type { ExecuteJobResult } from "../../../runtime/offeringTypes.js";
 
 /**
  * Seykota Agent Job: Tracking Coin Schema
@@ -19,39 +18,42 @@ import type { ExecuteJobResult } from "../../../runtime/offeringTypes.js";
 const COINGECKO_BASE = "https://api.coingecko.com/api/v3";
 const CG_KEY = process.env.COINGECKO_API_KEY || "";
 
-interface PriceCandle {
-  timestamp: number;
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-}
+/**
+ * @typedef {object} PriceCandle
+ * @property {number} timestamp
+ * @property {number} open
+ * @property {number} high
+ * @property {number} low
+ * @property {number} close
+ */
 
-interface TrendScore {
-  score: number;         // -7 to +7 (Seykota EMA scoring)
-  label: string;
-  signals: Record<string, boolean>;
-}
+/**
+ * @typedef {object} TrendScore
+ * @property {number} score  -7 to +7 (Seykota EMA scoring)
+ * @property {string} label
+ * @property {Record<string, boolean>} signals
+ */
 
-interface VolMetrics {
-  realized_vol_7d: number;      // annualized %
-  high_low_range_7d: number;    // max drawdown in window
-  avg_daily_range: number;      // avg (high-low)/close %
-  vol_regime: "LOW" | "MEDIUM" | "HIGH" | "EXTREME";
-}
+/**
+ * @typedef {object} VolMetrics
+ * @property {number} realized_vol_7d  annualized %
+ * @property {number} high_low_range_7d  max drawdown in window
+ * @property {number} avg_daily_range  avg (high-low)/close %
+ * @property {"LOW" | "MEDIUM" | "HIGH" | "EXTREME"} vol_regime
+ */
 
-function calcEMA(prices: number[], period: number): number[] {
+function calcEMA(prices, period) {
   const k = 2 / (period + 1);
-  const ema: number[] = [prices[0]];
+  const ema = [prices[0]];
   for (let i = 1; i < prices.length; i++) {
     ema.push(prices[i] * k + ema[i - 1] * (1 - k));
   }
   return ema;
 }
 
-function calcRealizedVol(closes: number[]): number {
+function calcRealizedVol(closes) {
   if (closes.length < 2) return 0;
-  const returns: number[] = [];
+  const returns = [];
   for (let i = 1; i < closes.length; i++) {
     returns.push(Math.log(closes[i] / closes[i - 1]));
   }
@@ -62,9 +64,9 @@ function calcRealizedVol(closes: number[]): number {
   return Math.sqrt(variance) * Math.sqrt(365) * 100; // annualized %
 }
 
-function calcATR(candles: PriceCandle[]): number {
+function calcATR(candles) {
   if (candles.length < 2) return 0;
-  const trs: number[] = [];
+  const trs = [];
   for (let i = 1; i < candles.length; i++) {
     const prevClose = candles[i - 1].close;
     const tr = Math.max(
@@ -78,9 +80,9 @@ function calcATR(candles: PriceCandle[]): number {
 }
 
 function scoreTrend(
-  price: number,
-  closes: number[]
-): TrendScore {
+  price,
+  closes
+) {
   if (closes.length < 50) {
     return { score: 0, label: "INSUFFICIENT_DATA", signals: {} };
   }
@@ -120,7 +122,7 @@ function scoreTrend(
   return { score, label, signals };
 }
 
-function buildVolMetrics(candles: PriceCandle[]): VolMetrics {
+function buildVolMetrics(candles) {
   const closes = candles.map((c) => c.close);
   const rv = calcRealizedVol(closes);
   const allHighs = candles.map((c) => c.high);
@@ -135,7 +137,7 @@ function buildVolMetrics(candles: PriceCandle[]): VolMetrics {
   const avgDailyRange =
     dailyRanges.reduce((a, b) => a + b, 0) / dailyRanges.length;
 
-  const volRegime: VolMetrics["vol_regime"] =
+  const volRegime =
     rv > 150
       ? "EXTREME"
       : rv > 80
@@ -153,14 +155,14 @@ function buildVolMetrics(candles: PriceCandle[]): VolMetrics {
 }
 
 export async function executeJob(
-  request: Record<string, any>
-): Promise<ExecuteJobResult> {
-  const coinId: string =
+  request
+) {
+  const coinId =
     request.coin_id || request.id || request.token || "ethereum";
   const includeChart = request.include_market_chart !== false;
   const includeDev = request.include_developer === true;
 
-  const cgHeaders: Record<string, string> = {
+  const cgHeaders = {
     ...(CG_KEY ? { "x-cg-demo-api-key": CG_KEY } : {}),
   };
 
@@ -195,9 +197,9 @@ export async function executeJob(
     const md = detail.market_data || {};
 
     // ── Parse OHLC candles ──
-    let candles: PriceCandle[] = [];
+    let candles = [];
     if (chartRes?.ok) {
-      const raw: [number, number, number, number, number][] =
+      const raw =
         await chartRes.json();
       candles = raw.map(([ts, o, h, l, c]) => ({
         timestamp: ts,
@@ -209,7 +211,7 @@ export async function executeJob(
     }
 
     const closes = candles.map((c) => c.close);
-    const currentPrice: number = md.current_price?.usd || 0;
+    const currentPrice = md.current_price?.usd || 0;
 
     // ── Compute derived metrics ──
     const trendScore = closes.length >= 10 ? scoreTrend(currentPrice, closes) : null;
@@ -303,7 +305,7 @@ export async function executeJob(
         categories: detail.categories?.slice(0, 5) || [],
       }),
     };
-  } catch (e: any) {
+  } catch (e) {
     return {
       deliverable: JSON.stringify({
         schema: "tracking_coin",

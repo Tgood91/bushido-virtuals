@@ -1,4 +1,3 @@
-import type { ExecuteJobResult } from "../../../runtime/offeringTypes.js";
 import { ROUTER_CONFIG, getRpcConfig, rpcHost } from "./lib/orchestrator-config.js";
 import {
   loadPolicy,
@@ -9,6 +8,9 @@ import {
   clampSwapUsd,
   createDailyCap,
 } from "./lib/orchestrator-policy.js";
+import { planNodleMicroSwap, NODLE_DEFAULTS } from "./lib/nodle-micro-swaps.js";
+import { readSequencerStatus } from "./lib/chain-guards.js";
+import { BASE_CONTRACTS, getWssConfig } from "./lib/base-contracts.js";
 
 /**
  * Swap Orchestrator Agent: Signal Alignment + Auto-Execution via CDP
@@ -46,8 +48,14 @@ import {
  *   },
  *   "min_alignment_score": 70,
  *   "max_swap_pct": 10,
- *   "dry_run": false   // if true, computes everything but does NOT call CDP
+ *   "dry_run": false,  // if true, computes everything but does NOT call CDP
+ *   "nodle_micro_swaps": { "enabled": true, "runs_today": 0 },  // optional sub-function: 0.05 USDC -> ETH
+ *   "preflight": true  // optional: read the Base sequencer uptime feed (network call) and report it
  * }
+ *
+ * PRE-FLIGHT: a live swap must not run while the Base sequencer is down or inside its 1h grace period
+ * (lib/chain-guards.js). Live execution is not wired yet, so this is reported, and a failed check marks every
+ * planned swap FAILED.
  *
  * SAFETY POLICY (lib/orchestrator-policy.js): a request is untrusted input.
  *   - Only assets on the server allowlist (ORCHESTRATOR_ALLOWED_ASSETS) are ever traded.
@@ -65,51 +73,57 @@ const CDP_API_KEY_NAME = process.env.CDP_API_KEY_NAME || "";
 const CDP_API_KEY_PRIVATE_KEY = process.env.CDP_API_KEY_PRIVATE_KEY || "";
 const CDP_WALLET_ID = process.env.CDP_WALLET_ID || "";
 
-type Direction = "LONG" | "SHORT" | "NEUTRAL" | "CLOSE";
+/** @typedef {"LONG" | "SHORT" | "NEUTRAL" | "CLOSE"} Direction */
 
-interface SeykotaSignal {
-  asset: string;
-  score: number;          // -7 to +7
-  action: string;         // LONG | SHORT | CLOSE | HOLD
-  atr?: number;
-  current_price?: number;
-}
+/**
+ * @typedef {object} SeykotaSignal
+ * @property {string} asset
+ * @property {number} score            -7 to +7
+ * @property {string} action           LONG | SHORT | CLOSE | HOLD
+ * @property {number} [atr]
+ * @property {number} [current_price]
+ */
 
-interface DruckenmillerSignal {
-  asset: string;
-  fundamental_signal: string;  // STRONG_BUY | BUY | HOLD | SELL | STRONG_SELL
-  action: string;               // ADD | HOLD | TRIM | EXIT_NOW
-  reward_risk_ratio?: number;
-  conviction?: number;
-}
+/**
+ * @typedef {object} DruckenmillerSignal
+ * @property {string} asset
+ * @property {string} fundamental_signal  STRONG_BUY | BUY | HOLD | SELL | STRONG_SELL
+ * @property {string} action              ADD | HOLD | TRIM | EXIT_NOW
+ * @property {number} [reward_risk_ratio]
+ * @property {number} [conviction]
+ */
 
-interface AlignmentResult {
-  asset: string;
-  seykota_direction: Direction;
-  druckenmiller_direction: Direction;
-  aligned: boolean;
-  alignment_score: number;     // 0-100
-  combined_action: "EXECUTE_LONG" | "EXECUTE_SHORT" | "EXECUTE_CLOSE" | "NO_TRADE";
-  rationale: string;
-}
+/**
+ * @typedef {object} AlignmentResult
+ * @property {string} asset
+ * @property {Direction} seykota_direction
+ * @property {Direction} druckenmiller_direction
+ * @property {boolean} aligned
+ * @property {number} alignment_score  0-100
+ * @property {"EXECUTE_LONG" | "EXECUTE_SHORT" | "EXECUTE_CLOSE" | "NO_TRADE"} combined_action
+ * @property {string} rationale
+ */
 
-interface SwapPlan {
-  asset: string;
-  direction: Direction;
-  from_token: string;
-  to_token: string;
-  amount_usd: number;
-  router_attempted: string[];
-  router_used: string | null;
-  rpc_used: string | null;
-  status: "PLANNED" | "EXECUTED" | "FAILED" | "ABORTED_NO_ALIGNMENT" | "REJECTED" | "DRY_RUN";
-  tx_hash: string | null;
-  error: string | null;
-}
+/**
+ * @typedef {object} SwapPlan
+ * @property {string} asset
+ * @property {Direction} direction
+ * @property {string} from_token
+ * @property {string} to_token
+ * @property {number} amount_usd
+ * @property {string[]} router_attempted
+ * @property {string | null} router_used
+ * @property {string | null} rpc_used
+ * @property {"PLANNED" | "EXECUTED" | "FAILED" | "ABORTED_NO_ALIGNMENT" | "REJECTED" | "DRY_RUN"} status
+ * @property {string | null} tx_hash
+ * @property {string | null} error
+ * @property {"nodle_micro_swaps"} [source]
+ */
 
 // ─── SIGNAL NORMALIZATION ────────────────────────────────────────────────────
 
-function seykotaToDirection(sig: SeykotaSignal): Direction {
+/** @param {SeykotaSignal} sig @returns {Direction} */
+function seykotaToDirection(sig) {
   const action = (sig.action || "").toUpperCase();
   if (action === "LONG" || sig.score >= 5) return "LONG";
   if (action === "SHORT" || sig.score <= -5) return "SHORT";
@@ -117,7 +131,8 @@ function seykotaToDirection(sig: SeykotaSignal): Direction {
   return "NEUTRAL";
 }
 
-function druckenmillerToDirection(sig: DruckenmillerSignal): Direction {
+/** @param {DruckenmillerSignal} sig @returns {Direction} */
+function druckenmillerToDirection(sig) {
   const fund = (sig.fundamental_signal || "").toUpperCase();
   const action = (sig.action || "").toUpperCase();
   if (action === "EXIT_NOW") return "CLOSE";
@@ -128,11 +143,13 @@ function druckenmillerToDirection(sig: DruckenmillerSignal): Direction {
 
 // ─── ALIGNMENT ENGINE ─────────────────────────────────────────────────────────
 
-function computeAlignment(
-  seykotaSig: SeykotaSignal | undefined,
-  druckSig: DruckenmillerSignal | undefined,
-  asset: string
-): AlignmentResult {
+/**
+ * @param {SeykotaSignal | undefined} seykotaSig
+ * @param {DruckenmillerSignal | undefined} druckSig
+ * @param {string} asset
+ * @returns {AlignmentResult}
+ */
+function computeAlignment(seykotaSig, druckSig, asset) {
   if (!seykotaSig || !druckSig) {
     return {
       asset,
@@ -193,7 +210,7 @@ function computeAlignment(
 
   score = Math.max(0, Math.min(100, Math.round(score)));
 
-  const combinedAction: AlignmentResult["combined_action"] =
+  const combinedAction =
     sDir === "LONG" ? "EXECUTE_LONG" :
     sDir === "SHORT" ? "EXECUTE_SHORT" :
     "NO_TRADE";
@@ -224,7 +241,8 @@ function computeAlignment(
  * shows the orchestration logic and router/RPC failover wiring — wire in
  * the actual @coinbase/coinbase-sdk calls in place of the placeholder.
  */
-async function executeSwapViaCDP(plan: SwapPlan, dryRun: boolean): Promise<SwapPlan> {
+/** @param {SwapPlan} plan @param {boolean} dryRun @returns {Promise<SwapPlan>} */
+async function executeSwapViaCDP(plan, dryRun) {
   if (dryRun) {
     return { ...plan, status: "DRY_RUN", router_used: ROUTER_CONFIG.primary.name, rpc_used: "primary" };
   }
@@ -249,18 +267,24 @@ async function executeSwapViaCDP(plan: SwapPlan, dryRun: boolean): Promise<SwapP
     status: "FAILED",
     error:
       "Live execution is not implemented in this version, so no trade was made. " +
-      "Use dry_run: true for a plan, or wire the CDP swap call (see swap-orchestrator-handler.ts) before going live.",
+      "Use dry_run: true for a plan, or wire the CDP swap call (see swap-orchestrator-handler.js) before going live.",
   };
 }
 
 // ─── MAIN ────────────────────────────────────────────────────────────────────
 
-export async function executeJob(request: Record<string, any>): Promise<ExecuteJobResult> {
+/**
+ * @param {Record<string, any>} request
+ * @returns {Promise<{ deliverable: string }>}  ACP ExecuteJobResult shape
+ */
+export async function executeJob(request) {
   // A request is untrusted: anything that is not an array of objects with a string asset is ignored, not crashed on.
-  const cleanSignals = <T extends { asset: string }>(v: unknown): T[] =>
-    Array.isArray(v) ? (v.filter(x => x && typeof x === "object" && typeof (x as any).asset === "string") as T[]) : [];
-  const seykotaSignals: SeykotaSignal[] = cleanSignals<SeykotaSignal>(request.seykota_signals);
-  const druckSignals: DruckenmillerSignal[] = cleanSignals<DruckenmillerSignal>(request.druckenmiller_signals);
+  const cleanSignals = (v) =>
+    Array.isArray(v) ? v.filter(x => x && typeof x === "object" && typeof x.asset === "string") : [];
+  /** @type {SeykotaSignal[]} */
+  const seykotaSignals = cleanSignals(request.seykota_signals);
+  /** @type {DruckenmillerSignal[]} */
+  const druckSignals = cleanSignals(request.druckenmiller_signals);
   const rawPortfolio = request.portfolio && typeof request.portfolio === "object" ? request.portfolio : {};
   const portfolio = {
     equity_usd: rawPortfolio.equity_usd ?? 10000,
@@ -273,14 +297,36 @@ export async function executeJob(request: Record<string, any>): Promise<ExecuteJ
   const maxSwapPct = clampMaxSwapPct(request.max_swap_pct, policy);
   const dryRun = request.dry_run === true;
 
+  // Optional pre-flight (network): sequencer uptime, read through the RPC failover chain. Fails closed.
+  const preflight = request.preflight === true ? await readSequencerStatus(Object.values(RPC_CONFIG)) : null;
+  if (preflight && !preflight.ok) {
+    return {
+      deliverable: JSON.stringify({
+        schema: "swap_orchestrator",
+        mode: dryRun ? "DRY_RUN" : "AUTO_EXECUTE",
+        executed_at: new Date().toISOString(),
+        summary: `Pre-flight failed: ${preflight.reason}. No swaps planned.`,
+        preflight,
+        alignments: [],
+        swap_plans: [],
+        executed_count: 0,
+        failed_count: 0,
+        aborted_count: 0,
+        rejected_count: 0,
+      }),
+    };
+  }
+
   // Build asset universe from both signal sets
-  const allAssets = new Set<string>([
+  const allAssets = new Set([
     ...seykotaSignals.map(s => s.asset),
     ...druckSignals.map(s => s.asset),
   ]);
 
-  const alignments: AlignmentResult[] = [];
-  const swapPlans: SwapPlan[] = [];
+  /** @type {AlignmentResult[]} */
+  const alignments = [];
+  /** @type {SwapPlan[]} */
+  const swapPlans = [];
 
   for (const asset of allAssets) {
     // Only server-approved assets may be traded: a request cannot name its own token.
@@ -311,7 +357,8 @@ export async function executeJob(request: Record<string, any>): Promise<ExecuteJ
       const existingPos = portfolio.existing_positions?.[asset];
       if (!existingPos) continue; // nothing to close
 
-      const plan: SwapPlan = {
+      /** @type {SwapPlan} */
+      const plan = {
         asset,
         direction: "CLOSE",
         from_token: asset,
@@ -358,9 +405,9 @@ export async function executeJob(request: Record<string, any>): Promise<ExecuteJ
     const maxSwapUsd = safeUsd(portfolio.equity_usd) * (maxSwapPct / 100);
     const availableUsdc = safeUsd(portfolio.usdc_balance);
 
-    let amountUsd: number;
-    let fromToken: string;
-    let toToken: string;
+    let amountUsd;
+    let fromToken;
+    let toToken;
 
     if (alignment.combined_action === "EXECUTE_LONG") {
       amountUsd = clampSwapUsd(Math.min(maxSwapUsd, availableUsdc), policy, dailyCap.remaining());
@@ -391,7 +438,8 @@ export async function executeJob(request: Record<string, any>): Promise<ExecuteJ
       continue;
     }
 
-    const plan: SwapPlan = {
+    /** @type {SwapPlan} */
+    const plan = {
       asset,
       direction: alignment.combined_action === "EXECUTE_LONG" ? "LONG" : "SHORT",
       from_token: fromToken,
@@ -408,6 +456,40 @@ export async function executeJob(request: Record<string, any>): Promise<ExecuteJ
     const executed = await executeSwapViaCDP(plan, dryRun);
     if (executed.status === "EXECUTED") dailyCap.consume(executed.amount_usd);
     swapPlans.push(executed);
+  }
+
+  // ─── nodle_micro-swaps sub-function ─────────────────────────────────────────
+  const nodleReq = request.nodle_micro_swaps && typeof request.nodle_micro_swaps === "object" ? request.nodle_micro_swaps : null;
+  let nodle = null;
+  if (nodleReq?.enabled === true) {
+    const ethAlignment = alignments.find(a => a.asset.toUpperCase() === "ETH");
+    // USDC already committed to aligned buys this cycle is not available to the micro-swap.
+    const committed = swapPlans.filter(p => p.from_token === "USDC" && p.status !== "REJECTED" && p.status !== "ABORTED_NO_ALIGNMENT")
+      .reduce((s, p) => s + p.amount_usd, 0);
+    nodle = planNodleMicroSwap({
+      usdcBalance: safeUsd(portfolio.usdc_balance) - committed,
+      ethAction: ethAlignment ? ethAlignment.combined_action : null,
+      runsToday: nodleReq.runs_today,
+      policy,
+      remainingDailyUsd: dailyCap.remaining(),
+    });
+    if (nodle.run) {
+      const executed = await executeSwapViaCDP({
+        asset: "ETH",
+        direction: "LONG",
+        from_token: NODLE_DEFAULTS.fromToken,
+        to_token: NODLE_DEFAULTS.toToken,
+        amount_usd: nodle.amount_usd,
+        router_attempted: [],
+        router_used: null,
+        rpc_used: null,
+        status: "PLANNED",
+        tx_hash: null,
+        error: null,
+      }, dryRun);
+      if (executed.status === "EXECUTED") dailyCap.consume(executed.amount_usd);
+      swapPlans.push({ ...executed, source: "nodle_micro_swaps" });
+    }
   }
 
   const executedSwaps = swapPlans.filter(p => p.status === "EXECUTED");
@@ -438,7 +520,11 @@ export async function executeJob(request: Record<string, any>): Promise<ExecuteJ
         allowed_assets: [...policy.allowedAssets],
         router_failover_order: Object.values(ROUTER_CONFIG).map(r => `${r.name} (${r.identity})`),
         rpc_failover_order: ["COINBASE_RPC", "FALLBACK_RPC_1", "FALLBACK_RPC_2"].map((n, i) => `${n}: ${rpcHost(Object.values(RPC_CONFIG)[i])}`),
+        monitoring_wss: rpcHost(getWssConfig(process.env).monitoring),
+        contracts: BASE_CONTRACTS,
       },
+      preflight,
+      nodle_micro_swaps: nodle,
       alignments,
       swap_plans: swapPlans,
       executed_count: executedSwaps.length,
