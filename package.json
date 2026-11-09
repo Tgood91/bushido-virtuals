@@ -2,9 +2,16 @@
   "name": "bushido-virtuals",
   "private": true,
   "type": "module",
-  "description": "Bushido ACP agent handlers and the swap orchestrator safety layer",
-  "engines": { "node": ">=22.18" },
+  "description": "Bushido ACP agent handlers, the swap orchestrator safety layer, and a read-only 0xSplits client for Base",
+  "engines": {
+    "node": ">=22.18"
+  },
   "scripts": {
-    "test": "node --test \"test/*.test.js\""
+    "test": "node --test \"test/*.test.js\"",
+    "check:base": "node scripts/check-base.mjs"
+  },
+  "dependencies": {
+    "@0xsplits/splits-sdk": "^6.7.0",
+    "viem": "^2.57.17"
   }
 }

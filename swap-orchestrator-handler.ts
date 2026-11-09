@@ -9,6 +9,9 @@ import {
   clampSwapUsd,
   createDailyCap,
 } from "./lib/orchestrator-policy.js";
+import { planNodleMicroSwap, NODLE_DEFAULTS } from "./lib/nodle-micro-swaps.js";
+import { readSequencerStatus } from "./lib/chain-guards.js";
+import { BASE_CONTRACTS, getWssConfig } from "./lib/base-contracts.js";
 
 /**
  * Swap Orchestrator Agent: Signal Alignment + Auto-Execution via CDP
@@ -46,8 +49,14 @@ import {
  *   },
  *   "min_alignment_score": 70,
  *   "max_swap_pct": 10,
- *   "dry_run": false   // if true, computes everything but does NOT call CDP
+ *   "dry_run": false,  // if true, computes everything but does NOT call CDP
+ *   "nodle_micro_swaps": { "enabled": true, "runs_today": 0 },  // optional sub-function: 0.05 USDC -> ETH
+ *   "preflight": true  // optional: read the Base sequencer uptime feed (network call) and report it
  * }
+ *
+ * PRE-FLIGHT: a live swap must not run while the Base sequencer is down or inside its 1h grace period
+ * (lib/chain-guards.js). Live execution is not wired yet, so this is reported, and a failed check marks every
+ * planned swap FAILED.
  *
  * SAFETY POLICY (lib/orchestrator-policy.js): a request is untrusted input.
  *   - Only assets on the server allowlist (ORCHESTRATOR_ALLOWED_ASSETS) are ever traded.
@@ -105,6 +114,7 @@ interface SwapPlan {
   status: "PLANNED" | "EXECUTED" | "FAILED" | "ABORTED_NO_ALIGNMENT" | "REJECTED" | "DRY_RUN";
   tx_hash: string | null;
   error: string | null;
+  source?: "nodle_micro_swaps";
 }
 
 // ─── SIGNAL NORMALIZATION ────────────────────────────────────────────────────
@@ -273,6 +283,26 @@ export async function executeJob(request: Record<string, any>): Promise<ExecuteJ
   const maxSwapPct = clampMaxSwapPct(request.max_swap_pct, policy);
   const dryRun = request.dry_run === true;
 
+  // Optional pre-flight (network): sequencer uptime, read through the RPC failover chain. Fails closed.
+  const preflight = request.preflight === true ? await readSequencerStatus(Object.values(RPC_CONFIG)) : null;
+  if (preflight && !preflight.ok) {
+    return {
+      deliverable: JSON.stringify({
+        schema: "swap_orchestrator",
+        mode: dryRun ? "DRY_RUN" : "AUTO_EXECUTE",
+        executed_at: new Date().toISOString(),
+        summary: `Pre-flight failed: ${preflight.reason}. No swaps planned.`,
+        preflight,
+        alignments: [],
+        swap_plans: [],
+        executed_count: 0,
+        failed_count: 0,
+        aborted_count: 0,
+        rejected_count: 0,
+      }),
+    };
+  }
+
   // Build asset universe from both signal sets
   const allAssets = new Set<string>([
     ...seykotaSignals.map(s => s.asset),
@@ -410,6 +440,40 @@ export async function executeJob(request: Record<string, any>): Promise<ExecuteJ
     swapPlans.push(executed);
   }
 
+  // ─── nodle_micro-swaps sub-function ─────────────────────────────────────────
+  const nodleReq = request.nodle_micro_swaps && typeof request.nodle_micro_swaps === "object" ? request.nodle_micro_swaps : null;
+  let nodle: { run: boolean; amount_usd: number; reason: string } | null = null;
+  if (nodleReq?.enabled === true) {
+    const ethAlignment = alignments.find(a => a.asset.toUpperCase() === "ETH");
+    // USDC already committed to aligned buys this cycle is not available to the micro-swap.
+    const committed = swapPlans.filter(p => p.from_token === "USDC" && p.status !== "REJECTED" && p.status !== "ABORTED_NO_ALIGNMENT")
+      .reduce((s, p) => s + p.amount_usd, 0);
+    nodle = planNodleMicroSwap({
+      usdcBalance: safeUsd(portfolio.usdc_balance) - committed,
+      ethAction: ethAlignment ? ethAlignment.combined_action : null,
+      runsToday: nodleReq.runs_today,
+      policy,
+      remainingDailyUsd: dailyCap.remaining(),
+    });
+    if (nodle.run) {
+      const executed = await executeSwapViaCDP({
+        asset: "ETH",
+        direction: "LONG",
+        from_token: NODLE_DEFAULTS.fromToken,
+        to_token: NODLE_DEFAULTS.toToken,
+        amount_usd: nodle.amount_usd,
+        router_attempted: [],
+        router_used: null,
+        rpc_used: null,
+        status: "PLANNED",
+        tx_hash: null,
+        error: null,
+      }, dryRun);
+      if (executed.status === "EXECUTED") dailyCap.consume(executed.amount_usd);
+      swapPlans.push({ ...executed, source: "nodle_micro_swaps" });
+    }
+  }
+
   const executedSwaps = swapPlans.filter(p => p.status === "EXECUTED");
   const failedSwaps = swapPlans.filter(p => p.status === "FAILED");
   const abortedSwaps = swapPlans.filter(p => p.status === "ABORTED_NO_ALIGNMENT");
@@ -438,7 +502,11 @@ export async function executeJob(request: Record<string, any>): Promise<ExecuteJ
         allowed_assets: [...policy.allowedAssets],
         router_failover_order: Object.values(ROUTER_CONFIG).map(r => `${r.name} (${r.identity})`),
         rpc_failover_order: ["COINBASE_RPC", "FALLBACK_RPC_1", "FALLBACK_RPC_2"].map((n, i) => `${n}: ${rpcHost(Object.values(RPC_CONFIG)[i])}`),
+        monitoring_wss: rpcHost(getWssConfig(process.env).monitoring),
+        contracts: BASE_CONTRACTS,
       },
+      preflight,
+      nodle_micro_swaps: nodle,
       alignments,
       swap_plans: swapPlans,
       executed_count: executedSwaps.length,
