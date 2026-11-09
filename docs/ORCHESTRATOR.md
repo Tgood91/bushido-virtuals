@@ -32,9 +32,9 @@ Names are the contract names on the verified Basescan source (checked 2026-11-08
 
 ## RPC endpoints (failover order)
 
-Defaults: `https://mainnet.base.org`, `https://1rpc.io/base`, `https://base.api.pocket.network`. `developer-access-mainnet.base.org`
-still does not connect (2026-11-09). `1rpc.io/base` hits its free-plan usage limit quickly; `https://base.drpc.org` is a
-good `FALLBACK_RPC_1` override. Override with `COINBASE_RPC`, `FALLBACK_RPC_1`, `FALLBACK_RPC_2`; monitoring WebSocket with
+Defaults: `https://mainnet.base.org`, `https://base.drpc.org`, `https://base.api.pocket.network`. `developer-access-mainnet.base.org`
+still does not connect (2026-11-09). `base.drpc.org` replaced `1rpc.io/base`, which hit its free-plan usage limit quickly.
+Override with `COINBASE_RPC`, `FALLBACK_RPC_1`, `FALLBACK_RPC_2`; monitoring WebSocket with
 `TENDERLY_WSS` (default `wss://base.gateway.tenderly.co`). Contract addresses: `lib/base-contracts.js`.
 
 ## Pre-flight and sub-functions
