@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-const { executeJob } = await import("../swap-orchestrator-handler.ts");
+const { executeJob } = await import("../swap-orchestrator-handler.js");
 
 const strong = (asset = "ETH") => ({
   seykota_signals: [{ asset, score: 7, action: "LONG" }],
@@ -60,7 +60,7 @@ test("live mode with credentials still fails closed: no fake success, no placeho
   process.env.CDP_API_KEY_NAME = "x";
   process.env.CDP_API_KEY_PRIVATE_KEY = "x";
   process.env.CDP_WALLET_ID = "x";
-  const m = await import("../swap-orchestrator-handler.ts?live");
+  const m = await import("../swap-orchestrator-handler.js?live");
   const out = (await m.executeJob({ ...strong(), portfolio: { equity_usd: 10000, usdc_balance: 2500 } })).deliverable;
   const d = JSON.parse(out);
   assert.equal(d.swap_plans[0].status, "FAILED");

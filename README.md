@@ -4,7 +4,7 @@ Job handlers and supporting material for the Bushido trading agents: a Seykota-s
 macro agent, market trackers, and a swap orchestrator that combines the two agents' signals into a capped swap plan.
 
 > **Status in one paragraph.** The swap orchestrator is the only part with a safety layer and tests (`lib/`, `test/`,
-> 48 tests, CI). It can produce a **dry-run plan only**: live execution through a Coinbase CDP wallet is **not
+> 47 tests, CI). It can produce a **dry-run plan only**: live execution through a Coinbase CDP wallet is **not
 > implemented** and fails closed. The other handlers are market-data and persona jobs kept as they were written; they
 > parse (checked in CI) but their data sources have not been exercised here. Anything that moves money, such as the
 > dip-buy and micro-swap examples, is reference material, not a finished product.
@@ -24,16 +24,18 @@ macro agent, market trackers, and a swap orchestrator that combines the two agen
 
 ## Quick start
 
-Requires **Node 22.18 or newer**. Node strips the TypeScript types itself, so the orchestrator handler needs no
-dependencies. `npm ci` installs `@0xsplits/splits-sdk` and its peer `viem`, used only by the read-only Splits client
+The swap orchestrator (`swap-orchestrator-handler.js`) and everything in `lib/` are plain Node.js JavaScript (ES modules),
+with types written as JSDoc comments, so the orchestrator handler runs with plain `node` and needs no
+dependencies. The test suite and `check:base` need **Node 22.18 or newer**, and so do the other `.ts` handlers, which
+rely on Node stripping their types. `npm ci` installs `@0xsplits/splits-sdk` and its peer `viem`, used only by the read-only Splits client
 (`lib/splits.js`) and its test.
 
 ```bash
 npm ci                                    # splits-sdk + viem
-npm test                                  # 48 tests, offline, a few seconds
+npm test                                  # 47 tests, offline, a few seconds
 npm run check:base                        # live, read-only: RPCs, WSS, contracts, sequencer
 node --input-type=module -e '
-  const { executeJob } = await import("./swap-orchestrator-handler.ts");
+  const { executeJob } = await import("./swap-orchestrator-handler.js");
   const out = await executeJob({
     seykota_signals: [{ asset: "ETH", score: 7, action: "LONG" }],
     druckenmiller_signals: [{ asset: "ETH", fundamental_signal: "STRONG_BUY", action: "ADD", reward_risk_ratio: 5.2, conviction: 8 }],
@@ -65,7 +67,7 @@ when Node runs the file, so the handlers run standalone. How to plug them into a
 
 ## Swap orchestrator
 
-File: [`swap-orchestrator-handler.ts`](swap-orchestrator-handler.ts). Full notes: [docs/ORCHESTRATOR.md](docs/ORCHESTRATOR.md).
+File: [`swap-orchestrator-handler.js`](swap-orchestrator-handler.js). Full notes: [docs/ORCHESTRATOR.md](docs/ORCHESTRATOR.md).
 
 **Request** (all fields optional except the signals):
 
@@ -230,7 +232,7 @@ a test. GitHub Actions runs the same command on Node 22 for every push and pull 
 ## Repository map
 
 ```
-swap-orchestrator-handler.ts     the orchestrator
+swap-orchestrator-handler.js     the orchestrator
 lib/orchestrator-config.js       routers, RPCs, failover numbers, host-only logging
 lib/orchestrator-policy.js       limits, clamps, daily cap, failover rule
 lib/base-contracts.js            Base contract and token addresses, monitoring WSS
@@ -248,7 +250,7 @@ docs/ACP.md                      ACP runtime notes (parked)
 
 ## What is and is not verified
 
-Verified: the tests above; that all 22 TypeScript sources parse; that `mainnet.base.org`, `base.api.pocket.network` and the Tenderly
+Verified: the tests above; that all 21 remaining TypeScript sources parse; that `mainnet.base.org`, `base.api.pocket.network` and the Tenderly
 WSS answer for chain 8453 (2026-11-09); that the Base contracts above have code deployed; that the router names match the verified Basescan source.
 
 Not verified: any live trade; the CDP SDK calls; the data sources behind the tracker handlers; the `.sol` contracts; the identity of

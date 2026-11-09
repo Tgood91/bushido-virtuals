@@ -1,7 +1,7 @@
 # Swap Orchestrator
 
 Combines a Seykota (trend) signal and a Druckenmiller (macro/fundamental) signal per asset, scores their agreement, and
-plans a swap on Base. Handler: `swap-orchestrator-handler.ts`. Config and safety rules: `lib/`.
+plans a swap on Base. Handler: `swap-orchestrator-handler.js`. Config and safety rules: `lib/`.
 
 ```
 Seykota signals ─┐                        (optional sequencer pre-flight)
