@@ -24,7 +24,7 @@ test("default RPCs are https, distinct, in the agreed order, and not the dead de
   const urls = Object.values(DEFAULT_RPCS);
   assert.equal(new Set(urls).size, 3);
   for (const u of urls) assert.ok(u.startsWith("https://"), u);
-  assert.deepEqual(urls, ["https://mainnet.base.org", "https://1rpc.io/base", "https://base.api.pocket.network"]);
+  assert.deepEqual(urls, ["https://mainnet.base.org", "https://base.drpc.org", "https://base.api.pocket.network"]);
   assert.doesNotMatch(urls.join(" "), /developer-access-mainnet\.base\.org/); // still does not connect (2026-11-09)
 });
 

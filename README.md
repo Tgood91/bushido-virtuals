@@ -115,10 +115,10 @@ the verified Basescan source (checked 2026-11-08):
 | fallback 1 | LI.FI LiFiDiamond |
 | fallback 2 | Uniswap UniversalRouter |
 
-Default RPCs, in failover order: `mainnet.base.org`, `1rpc.io/base`, `base.api.pocket.network`.
-`developer-access-mainnet.base.org` is not a default: it still did not connect on 2026-11-09. `1rpc.io/base` is
-**unreliable on its free plan**: it answered once on 2026-11-09, then returned a usage-limit error, as it did on
-2026-11-08. Failover passes over it, but `FALLBACK_RPC_1=https://base.drpc.org` is a better value if it keeps failing. RPC
+Default RPCs, in failover order: `mainnet.base.org`, `base.drpc.org`, `base.api.pocket.network`.
+`developer-access-mainnet.base.org` is not a default: it still did not connect on 2026-11-09. `1rpc.io/base` was the
+first fallback before, but it is **unreliable on its free plan** (it answered once, then returned a usage-limit error),
+so `base.drpc.org` replaced it. RPC
 URLs can carry API keys, so only the host is ever written to a deliverable.
 
 Real-time monitoring WebSocket: `wss://base.gateway.tenderly.co` (`TENDERLY_WSS`), read-only, answered `eth_chainId`

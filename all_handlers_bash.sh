@@ -2673,7 +2673,7 @@ const ROUTER_CONFIG = {
 
 const RPC_CONFIG = {
   primary: process.env.COINBASE_RPC || "https://developer-access-mainnet.base.org",
-  fallback_1: process.env.FALLBACK_RPC_1 || "https://1rpc.io/base",
+  fallback_1: process.env.FALLBACK_RPC_1 || "https://base.drpc.org",
   fallback_2: process.env.FALLBACK_RPC_2 || "https://base.api.pocket.network",
 };
 
@@ -3173,7 +3173,7 @@ const ROUTER_CONFIG = {
 
 const RPC_CONFIG = {
   primary: process.env.COINBASE_RPC || "https://developer-access-mainnet.base.org",
-  fallback_1: process.env.FALLBACK_RPC_1 || "https://1rpc.io/base",
+  fallback_1: process.env.FALLBACK_RPC_1 || "https://base.drpc.org",
   fallback_2: process.env.FALLBACK_RPC_2 || "https://base.api.pocket.network",
 };
 
