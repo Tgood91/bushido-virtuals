@@ -1,12 +1,11 @@
 #!/bin/bash
 # All Seykota/Druckenmiller ACP job handler files
-# Run this script to recreate all .ts files in the current directory
+# Run this script to recreate all .js files in the current directory
 
 mkdir -p handlers
 cd handlers
 
-cat > bushido-soul-handler.ts << 'HANDLER_EOF'
-import type { ExecuteJobResult } from "../../../runtime/offeringTypes.js";
+cat > bushido-soul-handler.js << 'HANDLER_EOF'
 
 /**
  * Seykota Agent Job: Bushido Soul Schema
@@ -57,17 +56,18 @@ import type { ExecuteJobResult } from "../../../runtime/offeringTypes.js";
 
 // ─── BUSHIDO VIRTUES ─────────────────────────────────────────────────────────
 
-interface Virtue {
-  kanji: string;
-  romaji: string;
-  english: string;
-  trading_principle: string;
-  questions: string[];
-  violations: string[];
-  affirmations: string[];
-}
+/**
+ * @typedef {object} Virtue
+ * @property {string} kanji
+ * @property {string} romaji
+ * @property {string} english
+ * @property {string} trading_principle
+ * @property {string[]} questions
+ * @property {string[]} violations
+ * @property {string[]} affirmations
+ */
 
-const BUSHIDO_VIRTUES: Virtue[] = [
+const BUSHIDO_VIRTUES = [
   {
     kanji: "義",
     romaji: "GI",
@@ -233,27 +233,29 @@ const BUSHIDO_VIRTUES: Virtue[] = [
 
 // ─── BEHAVIORAL AUDIT ENGINE ─────────────────────────────────────────────────
 
-interface VirtueScore {
-  kanji: string;
-  romaji: string;
-  english: string;
-  score: number;           // 0–10
-  grade: "MASTER" | "DISCIPLINED" | "LEARNING" | "STRUGGLING" | "VIOLATED";
-  flags: string[];         // specific violations detected
-  guidance: string;        // what to do next cycle
-}
+/**
+ * @typedef {object} VirtueScore
+ * @property {string} kanji
+ * @property {string} romaji
+ * @property {string} english
+ * @property {number} score  0–10
+ * @property {"MASTER" | "DISCIPLINED" | "LEARNING" | "STRUGGLING" | "VIOLATED"} grade
+ * @property {string[]} flags  specific violations detected
+ * @property {string} guidance  what to do next cycle
+ */
 
-interface BushidoAudit {
-  cycle_number: number;
-  overall_score: number;       // 0–100
-  overall_grade: string;
-  soul_status: "ALIGNED" | "DRIFTING" | "COMPROMISED" | "BROKEN";
-  virtue_scores: VirtueScore[];
-  critical_violations: string[];
-  commendations: string[];
-  daily_mandate: string;       // one clear instruction for the next cycle
-  closing_reflection: string;  // Bushido wisdom for the day
-}
+/**
+ * @typedef {object} BushidoAudit
+ * @property {number} cycle_number
+ * @property {number} overall_score  0–100
+ * @property {string} overall_grade
+ * @property {"ALIGNED" | "DRIFTING" | "COMPROMISED" | "BROKEN"} soul_status
+ * @property {VirtueScore[]} virtue_scores
+ * @property {string[]} critical_violations
+ * @property {string[]} commendations
+ * @property {string} daily_mandate  one clear instruction for the next cycle
+ * @property {string} closing_reflection  Bushido wisdom for the day
+ */
 
 const CLOSING_REFLECTIONS = [
   "The way of the samurai is found in death. Approach each trade as if it were your last — complete, decisive, and without regret. — Yamamoto Tsunetomo",
@@ -274,17 +276,17 @@ const CLOSING_REFLECTIONS = [
 ];
 
 function scoreVirtue(
-  virtue: Virtue,
-  request: Record<string, any>,
-  index: number
-): VirtueScore {
-  const flags: string[] = [];
+  virtue,
+  request,
+  index
+) {
+  const flags = [];
   let score = 10;
 
   const drawdownPct = Number(request.drawdown_pct || 0);
   const overrides = Number(request.overrides_this_week || 0);
   const consecutiveLosses = Number(request.consecutive_losses || 0);
-  const recentActions: Array<{ action: string; cycle: number }> =
+  const recentActions =
     request.recent_actions || [];
   const equity = Number(request.account_equity || 10000);
   const hwm = Number(request.high_water_mark || equity);
@@ -409,7 +411,7 @@ function scoreVirtue(
 
   score = Math.max(0, Math.min(10, score));
 
-  const grade: VirtueScore["grade"] =
+  const grade =
     score >= 9
       ? "MASTER"
       : score >= 7
@@ -420,7 +422,7 @@ function scoreVirtue(
       ? "STRUGGLING"
       : "VIOLATED";
 
-  const guidanceMap: Record<VirtueScore["grade"], string> = {
+  const guidanceMap = {
     MASTER: `${virtue.romaji} is strong. Maintain this standard and let it anchor the other virtues.`,
     DISCIPLINED: `${virtue.romaji} is solid. One area of attention: ${flags[0] || "maintain current practice"}.`,
     LEARNING: `${virtue.romaji} needs attention. Review violations and apply corrections next cycle before opening positions.`,
@@ -440,9 +442,9 @@ function scoreVirtue(
 }
 
 function buildDailyMandate(
-  scores: VirtueScore[],
-  request: Record<string, any>
-): string {
+  scores,
+  request
+) {
   const violated = scores.filter((s) => s.grade === "VIOLATED");
   const struggling = scores.filter((s) => s.grade === "STRUGGLING");
   const drawdownPct = Number(request.drawdown_pct || 0);
@@ -466,15 +468,15 @@ function buildDailyMandate(
 // ─── MAIN ────────────────────────────────────────────────────────────────────
 
 export async function executeJob(
-  request: Record<string, any>
-): Promise<ExecuteJobResult> {
+  request
+) {
   const cycleNumber = Number(request.cycle_number || 1);
   const equity = Number(request.account_equity || 10000);
   const hwm = Number(request.high_water_mark || equity);
   const drawdownPct = Number(request.drawdown_pct || ((hwm - equity) / hwm) * 100);
 
   // ── Score all seven virtues ──
-  const virtueScores: VirtueScore[] = BUSHIDO_VIRTUES.map((v, i) =>
+  const virtueScores = BUSHIDO_VIRTUES.map((v, i) =>
     scoreVirtue(v, request, i)
   );
 
@@ -493,7 +495,7 @@ export async function executeJob(
       ? "見習い MINARAI — Apprentice"
       : "浪人 RONIN — Masterless (system abandoned)";
 
-  const soulStatus: BushidoAudit["soul_status"] =
+  const soulStatus =
     overallScore >= 80
       ? "ALIGNED"
       : overallScore >= 60
@@ -536,7 +538,7 @@ export async function executeJob(
     })),
   };
 
-  const audit: BushidoAudit = {
+  const audit = {
     cycle_number: cycleNumber,
     overall_score: overallScore,
     overall_grade: overallGrade,
@@ -586,12 +588,11 @@ export async function executeJob(
 }
 HANDLER_EOF
 
-cat > druck-suggestions-handler.ts << 'HANDLER_EOF'
-import type { ExecuteJobResult } from "../../../runtime/offeringTypes.js";
+cat > druck-suggestions-handler.js << 'HANDLER_EOF'
 
 /**
  * Druckenmiller Agent Job: Suggestions Schema
- * cron: "0 */6 * * *"  — Every 6 hours
+ * cron: "0 *\/6 * * *"  — Every 6 hours
  *
  * Generates macro-informed, asymmetry-filtered trading suggestions
  * in the Druckenmiller style: macro regime first, then individual
@@ -615,32 +616,33 @@ const DEFILLAMA_BASE = "https://api.llama.fi";
 const COINGECKO_BASE = "https://api.coingecko.com/api/v3";
 const CG_KEY = process.env.COINGECKO_API_KEY || "";
 
-type RiskTier = "normal" | "reduced" | "defensive" | "survival";
-type MacroRegime = "RISK_ON_BULL" | "RISK_ON_FRAGILE" | "TRANSITIONAL" | "RISK_OFF_BEAR" | "CRISIS";
+/** @typedef {"normal" | "reduced" | "defensive" | "survival"} RiskTier */
+/** @typedef {"RISK_ON_BULL" | "RISK_ON_FRAGILE" | "TRANSITIONAL" | "RISK_OFF_BEAR" | "CRISIS"} MacroRegime */
 
-interface Suggestion {
-  id: string;
-  priority: "HIGH" | "MEDIUM" | "LOW";
-  direction: "LONG" | "SHORT" | "NEUTRAL";
-  asset: string;
-  category: string;
-  action: string;
-  thesis: string;
-  asymmetry_note: string;
-  min_rr_ratio: number;
-  conviction_required: number;
-  macro_dependency: string;
-  applicable_regimes: MacroRegime[];
-  applicable_tiers: RiskTier[];
-  invalidation: string;
-}
+/**
+ * @typedef {object} Suggestion
+ * @property {string} id
+ * @property {"HIGH" | "MEDIUM" | "LOW"} priority
+ * @property {"LONG" | "SHORT" | "NEUTRAL"} direction
+ * @property {string} asset
+ * @property {string} category
+ * @property {string} action
+ * @property {string} thesis
+ * @property {string} asymmetry_note
+ * @property {number} min_rr_ratio
+ * @property {number} conviction_required
+ * @property {string} macro_dependency
+ * @property {MacroRegime[]} applicable_regimes
+ * @property {RiskTier[]} applicable_tiers
+ * @property {string} invalidation
+ */
 
-const TIER_ORDER: Record<RiskTier, number> = { normal: 0, reduced: 1, defensive: 2, survival: 3 };
-const REGIME_RISK: Record<MacroRegime, number> = {
+const TIER_ORDER = { normal: 0, reduced: 1, defensive: 2, survival: 3 };
+const REGIME_RISK = {
   RISK_ON_BULL: 0, RISK_ON_FRAGILE: 1, TRANSITIONAL: 2, RISK_OFF_BEAR: 3, CRISIS: 4,
 };
 
-function buildStaticSuggestions(): Suggestion[] {
+function buildStaticSuggestions() {
   return [
     {
       id: "druck-l1-rotation-early",
@@ -725,17 +727,17 @@ function buildStaticSuggestions(): Suggestion[] {
   ];
 }
 
-export async function executeJob(request: Record<string, any>): Promise<ExecuteJobResult> {
-  const riskTier: RiskTier = (request.risk_tier as RiskTier) || "normal";
-  const macroRegime: MacroRegime = (request.macro_regime as MacroRegime) || "TRANSITIONAL";
+export async function executeJob(request) {
+  const riskTier = (request.risk_tier) || "normal";
+  const macroRegime = (request.macro_regime) || "TRANSITIONAL";
   const equity = Number(request.account_equity || 50000);
-  const activePositions: string[] = request.active_positions || [];
+  const activePositions = request.active_positions || [];
 
-  const cgHeaders: Record<string, string> = CG_KEY ? { "x-cg-demo-api-key": CG_KEY } : {};
+  const cgHeaders = CG_KEY ? { "x-cg-demo-api-key": CG_KEY } : {};
 
   // Fetch live macro proxies
-  let btcChange7d: number | null = null;
-  let totalCryptoTvl: number | null = null;
+  let btcChange7d = null;
+  let totalCryptoTvl = null;
 
   try {
     const [cgRes, tvlRes] = await Promise.all([
@@ -747,7 +749,7 @@ export async function executeJob(request: Record<string, any>): Promise<ExecuteJ
       btcChange7d = p.bitcoin?.usd_7d_change ?? null;
     }
     if (tvlRes.ok) {
-      const chains: any[] = await tvlRes.json();
+      const chains = await tvlRes.json();
       totalCryptoTvl = chains.reduce((sum, c) => sum + (c.tvl || 0), 0);
     }
   } catch (_) {}
@@ -760,7 +762,7 @@ export async function executeJob(request: Record<string, any>): Promise<ExecuteJ
   );
 
   // Dynamic: if BTC strongly positive, elevate L1 rotation suggestion
-  const dynamic: Suggestion[] = [];
+  const dynamic = [];
   if (btcChange7d !== null && btcChange7d > 15 && (macroRegime === "RISK_ON_BULL" || macroRegime === "RISK_ON_FRAGILE")) {
     dynamic.push({
       id: "live-btc-momentum-rotate",
@@ -809,12 +811,11 @@ export async function executeJob(request: Record<string, any>): Promise<ExecuteJ
 }
 HANDLER_EOF
 
-cat > druck-tracking-chain-handler.ts << 'HANDLER_EOF'
-import type { ExecuteJobResult } from "../../../runtime/offeringTypes.js";
+cat > druck-tracking-chain-handler.js << 'HANDLER_EOF'
 
 /**
  * Druckenmiller Agent Job: Tracking Chain Schema
- * cron: "0 */3 * * *"  — Every 3 hours
+ * cron: "0 *\/3 * * *"  — Every 3 hours
  *
  * Chain-level intelligence through the Druckenmiller macro lens.
  * TVL is the blockchain equivalent of earnings — the fundamental
@@ -835,24 +836,25 @@ import type { ExecuteJobResult } from "../../../runtime/offeringTypes.js";
 
 const DEFILLAMA_BASE = "https://api.llama.fi";
 
-type MacroRegime = "RISK_ON_BULL" | "RISK_ON_FRAGILE" | "TRANSITIONAL" | "RISK_OFF_BEAR" | "CRISIS";
+/** @typedef {"RISK_ON_BULL" | "RISK_ON_FRAGILE" | "TRANSITIONAL" | "RISK_OFF_BEAR" | "CRISIS"} MacroRegime */
 
-interface ChainProfile {
-  name: string;
-  tvl_usd: number;
-  tvl_change_1d: number | null;
-  tvl_change_7d: number | null;
-  dex_volume_24h: number | null;
-  fee_revenue_24h: number | null;
-  volume_tvl_ratio: number | null;
-  fundamental_signal: "STRONG_BUY" | "BUY" | "HOLD" | "SELL" | "STRONG_SELL";
-  revision_direction: "ACCELERATING" | "IMPROVING" | "STABLE" | "DETERIORATING" | "COLLAPSING";
-  relative_rank: number;
-  druckenmiller_read: string;
-  alert: string | null;
-}
+/**
+ * @typedef {object} ChainProfile
+ * @property {string} name
+ * @property {number} tvl_usd
+ * @property {number | null} tvl_change_1d
+ * @property {number | null} tvl_change_7d
+ * @property {number | null} dex_volume_24h
+ * @property {number | null} fee_revenue_24h
+ * @property {number | null} volume_tvl_ratio
+ * @property {"STRONG_BUY" | "BUY" | "HOLD" | "SELL" | "STRONG_SELL"} fundamental_signal
+ * @property {"ACCELERATING" | "IMPROVING" | "STABLE" | "DETERIORATING" | "COLLAPSING"} revision_direction
+ * @property {number} relative_rank
+ * @property {string} druckenmiller_read
+ * @property {string | null} alert
+ */
 
-function classifyRevision(change7d: number | null, change1d: number | null): ChainProfile["revision_direction"] {
+function classifyRevision(change7d, change1d) {
   if (change7d == null) return "STABLE";
   if (change7d > 20) return "ACCELERATING";
   if (change7d > 5) return "IMPROVING";
@@ -862,9 +864,9 @@ function classifyRevision(change7d: number | null, change1d: number | null): Cha
 }
 
 function classifyFundamentalSignal(
-  revision: ChainProfile["revision_direction"],
-  macroRegime: MacroRegime
-): ChainProfile["fundamental_signal"] {
+  revision,
+  macroRegime
+) {
   const regimePositive = macroRegime === "RISK_ON_BULL" || macroRegime === "RISK_ON_FRAGILE";
   const regimeNegative = macroRegime === "RISK_OFF_BEAR" || macroRegime === "CRISIS";
 
@@ -878,7 +880,7 @@ function classifyFundamentalSignal(
   return "HOLD";
 }
 
-function buildDruckRead(name: string, signal: ChainProfile["fundamental_signal"], revision: ChainProfile["revision_direction"], tvlChange7d: number | null): string {
+function buildDruckRead(name, signal, revision, tvlChange7d) {
   const pct = tvlChange7d != null ? ` (${tvlChange7d > 0 ? "+" : ""}${tvlChange7d.toFixed(1)}% 7D TVL)` : "";
   if (signal === "STRONG_BUY") return `${name}${pct} — STRONG BUY. TVL accelerating = positive earnings revision. Be early. This is the Druckenmiller setup.`;
   if (signal === "BUY") return `${name}${pct} — BUY. Fundamentals improving. Position before consensus recognizes the revision.`;
@@ -887,9 +889,9 @@ function buildDruckRead(name: string, signal: ChainProfile["fundamental_signal"]
   return `${name}${pct} — STRONG SELL or SHORT. TVL collapsing. Capital exiting. The narrative will catch up to the fundamentals — be short first.`;
 }
 
-export async function executeJob(request: Record<string, any>): Promise<ExecuteJobResult> {
-  const chainNames: string[] = (request.chains || ["ethereum", "base", "solana", "avalanche", "arbitrum", "sui", "near"]).map((c: string) => c.toLowerCase());
-  const macroRegime: MacroRegime = (request.macro_regime as MacroRegime) || "TRANSITIONAL";
+export async function executeJob(request) {
+  const chainNames = (request.chains || ["ethereum", "base", "solana", "avalanche", "arbitrum", "sui", "near"]).map((c) => c.toLowerCase());
+  const macroRegime = (request.macro_regime) || "TRANSITIONAL";
   const includeProtocols = request.include_protocols !== false;
 
   try {
@@ -900,20 +902,20 @@ export async function executeJob(request: Record<string, any>): Promise<ExecuteJ
       includeProtocols ? fetch(`${DEFILLAMA_BASE}/protocols`) : Promise.resolve(null),
     ]);
 
-    const allChains: any[] = chainRes.ok ? await chainRes.json() : [];
-    const dexData: any = dexRes.ok ? await dexRes.json() : null;
-    const feesData: any = feesRes.ok ? await feesRes.json() : null;
-    const allProtocols: any[] = protocolRes?.ok ? await protocolRes.json() : [];
+    const allChains = chainRes.ok ? await chainRes.json() : [];
+    const dexData = dexRes.ok ? await dexRes.json() : null;
+    const feesData = feesRes.ok ? await feesRes.json() : null;
+    const allProtocols = protocolRes?.ok ? await protocolRes.json() : [];
 
     // Build volume/fee maps
-    const dexVolMap: Record<string, number> = {};
+    const dexVolMap = {};
     for (const p of dexData?.protocols || []) {
       for (const chain of p.chains || []) {
         const k = chain.toLowerCase();
         dexVolMap[k] = (dexVolMap[k] || 0) + (p.total24h || 0) / (p.chains?.length || 1);
       }
     }
-    const feeMap: Record<string, number> = {};
+    const feeMap = {};
     for (const p of feesData?.protocols || []) {
       for (const chain of p.chains || []) {
         const k = chain.toLowerCase();
@@ -922,7 +924,7 @@ export async function executeJob(request: Record<string, any>): Promise<ExecuteJ
     }
 
     // Build profiles
-    const profiles: ChainProfile[] = chainNames.map(name => {
+    const profiles = chainNames.map(name => {
       const raw = allChains.find(c => c.name?.toLowerCase() === name);
       const tvl = raw?.tvl || 0;
       const c1d = raw?.change_1d ?? null;
@@ -958,11 +960,11 @@ export async function executeJob(request: Record<string, any>): Promise<ExecuteJ
     sorted.forEach((p, i) => { const m = profiles.find(x => x.name === p.name); if (m) m.relative_rank = i + 1; });
 
     // Top protocols per chain
-    const topProtocols: Record<string, string[]> = {};
+    const topProtocols = {};
     if (includeProtocols && allProtocols.length > 0) {
       for (const name of chainNames) {
         topProtocols[name] = allProtocols
-          .filter(p => (p.chains || []).map((c: string) => c.toLowerCase()).includes(name))
+          .filter(p => (p.chains || []).map((c) => c.toLowerCase()).includes(name))
           .sort((a, b) => (b.tvl || 0) - (a.tvl || 0))
           .slice(0, 3)
           .map(p => `${p.name} ($${((p.tvl || 0) / 1e6).toFixed(1)}M TVL)`);
@@ -994,18 +996,17 @@ export async function executeJob(request: Record<string, any>): Promise<ExecuteJ
         top_protocols: topProtocols,
       }),
     };
-  } catch (e: any) {
+  } catch (e) {
     return { deliverable: JSON.stringify({ schema: "druckenmiller_tracking_chain", error: e.message }) };
   }
 }
 HANDLER_EOF
 
-cat > druck-tracking-coin-handler.ts << 'HANDLER_EOF'
-import type { ExecuteJobResult } from "../../../runtime/offeringTypes.js";
+cat > druck-tracking-coin-handler.js << 'HANDLER_EOF'
 
 /**
  * Druckenmiller Agent Job: Tracking Coin Schema
- * cron: "*/20 * * * *"  — Every 20 minutes
+ * cron: "*\/20 * * * *"  — Every 20 minutes
  *
  * Deep per-coin intelligence through the Druckenmiller lens:
  * fundamental revision tracking, asymmetry calculation, thesis
@@ -1030,24 +1031,26 @@ import type { ExecuteJobResult } from "../../../runtime/offeringTypes.js";
 const COINGECKO_BASE = "https://api.coingecko.com/api/v3";
 const CG_KEY = process.env.COINGECKO_API_KEY || "";
 
-type MacroRegime = "RISK_ON_BULL" | "RISK_ON_FRAGILE" | "TRANSITIONAL" | "RISK_OFF_BEAR" | "CRISIS";
+/** @typedef {"RISK_ON_BULL" | "RISK_ON_FRAGILE" | "TRANSITIONAL" | "RISK_OFF_BEAR" | "CRISIS"} MacroRegime */
 
-interface FundamentalRevision {
-  metric: string;
-  direction: "IMPROVING" | "STABLE" | "DETERIORATING";
-  detail: string;
-}
+/**
+ * @typedef {object} FundamentalRevision
+ * @property {string} metric
+ * @property {"IMPROVING" | "STABLE" | "DETERIORATING"} direction
+ * @property {string} detail
+ */
 
-interface AsymmetryProfile {
-  reward_usd: number | null;
-  risk_usd: number | null;
-  rr_ratio: number | null;
-  grade: "HOME_RUN" | "EXCELLENT" | "ACCEPTABLE" | "MARGINAL" | "REJECT" | "UNKNOWN";
-  action: "SIZE_MAX" | "SIZE_NORMAL" | "SIZE_SMALL" | "PASS" | "EXIT";
-  sizing_pct_of_portfolio: string;
-}
+/**
+ * @typedef {object} AsymmetryProfile
+ * @property {number | null} reward_usd
+ * @property {number | null} risk_usd
+ * @property {number | null} rr_ratio
+ * @property {"HOME_RUN" | "EXCELLENT" | "ACCEPTABLE" | "MARGINAL" | "REJECT" | "UNKNOWN"} grade
+ * @property {"SIZE_MAX" | "SIZE_NORMAL" | "SIZE_SMALL" | "PASS" | "EXIT"} action
+ * @property {string} sizing_pct_of_portfolio
+ */
 
-function calcAsymmetry(current: number, target: number | null, stop: number | null): AsymmetryProfile {
+function calcAsymmetry(current, target, stop) {
   if (!target || !stop || current <= 0) {
     return { reward_usd: null, risk_usd: null, rr_ratio: null, grade: "UNKNOWN", action: "PASS", sizing_pct_of_portfolio: "0%" };
   }
@@ -1055,14 +1058,14 @@ function calcAsymmetry(current: number, target: number | null, stop: number | nu
   const risk = current - stop;
   const rr = risk > 0 ? Math.round((reward / risk) * 10) / 10 : null;
 
-  const grade: AsymmetryProfile["grade"] =
+  const grade =
     rr == null ? "UNKNOWN" :
     rr >= 8 ? "HOME_RUN" :
     rr >= 4 ? "EXCELLENT" :
     rr >= 2.5 ? "ACCEPTABLE" :
     rr >= 1.5 ? "MARGINAL" : "REJECT";
 
-  const action: AsymmetryProfile["action"] =
+  const action =
     grade === "HOME_RUN" ? "SIZE_MAX" :
     grade === "EXCELLENT" ? "SIZE_NORMAL" :
     grade === "ACCEPTABLE" ? "SIZE_SMALL" :
@@ -1077,8 +1080,8 @@ function calcAsymmetry(current: number, target: number | null, stop: number | nu
   return { reward_usd: Math.round(reward * 100) / 100, risk_usd: Math.round(Math.abs(risk) * 100) / 100, rr_ratio: rr, grade, action, sizing_pct_of_portfolio: sizing };
 }
 
-function buildRevisions(md: any, priceChange7d: number, priceChange30d: number): FundamentalRevision[] {
-  const revisions: FundamentalRevision[] = [];
+function buildRevisions(md, priceChange7d, priceChange30d) {
+  const revisions = [];
 
   // Volume trajectory as revenue proxy
   const vol = md.total_volume?.usd || 0;
@@ -1120,9 +1123,8 @@ function buildRevisions(md: any, priceChange7d: number, priceChange30d: number):
   return revisions;
 }
 
-function checkMacroAlignment(macroRegime: MacroRegime, priceChange7d: number): {
-  aligned: boolean; note: string;
-} {
+function checkMacroAlignment(macroRegime, priceChange7d)
+{
   if (macroRegime === "RISK_ON_BULL" && priceChange7d > 0)
     return { aligned: true, note: "Macro tailwind. Risk-on regime supports long exposure." };
   if (macroRegime === "RISK_OFF_BEAR" && priceChange7d < 0)
@@ -1134,16 +1136,16 @@ function checkMacroAlignment(macroRegime: MacroRegime, priceChange7d: number): {
   return { aligned: true, note: "Macro regime neutral relative to this position." };
 }
 
-export async function executeJob(request: Record<string, any>): Promise<ExecuteJobResult> {
-  const coinId: string = request.coin_id || request.id || "ethereum";
-  const macroRegime: MacroRegime = (request.macro_regime as MacroRegime) || "TRANSITIONAL";
+export async function executeJob(request) {
+  const coinId = request.coin_id || request.id || "ethereum";
+  const macroRegime = (request.macro_regime) || "TRANSITIONAL";
   const entryPrice = Number(request.entry_price || 0);
   const targetPrice = Number(request.target_price || 0);
   const stopPrice = Number(request.stop_price || 0);
   const conviction = Number(request.conviction || 5);
   const includeOhlc = request.include_ohlc !== false;
 
-  const cgHeaders: Record<string, string> = CG_KEY ? { "x-cg-demo-api-key": CG_KEY } : {};
+  const cgHeaders = CG_KEY ? { "x-cg-demo-api-key": CG_KEY } : {};
 
   try {
     const [detailRes, ohlcRes] = await Promise.all([
@@ -1172,7 +1174,7 @@ export async function executeJob(request: Record<string, any>): Promise<ExecuteJ
     const improvingCount = revisions.filter(r => r.direction === "IMPROVING").length;
     const deterioratingCount = revisions.filter(r => r.direction === "DETERIORATING").length;
 
-    const fundamentalTrend: "IMPROVING" | "MIXED" | "DETERIORATING" =
+    const fundamentalTrend =
       improvingCount > deterioratingCount ? "IMPROVING" :
       deterioratingCount > improvingCount ? "DETERIORATING" : "MIXED";
 
@@ -1223,18 +1225,17 @@ export async function executeJob(request: Record<string, any>): Promise<ExecuteJ
         position_inputs: { entry_price: entryPrice, target_price: targetPrice, stop_price: stopPrice },
       }),
     };
-  } catch (e: any) {
+  } catch (e) {
     return { deliverable: JSON.stringify({ schema: "druckenmiller_tracking_coin", error: e.message, coin_id: coinId }) };
   }
 }
 HANDLER_EOF
 
-cat > druck-tracking-volume-handler.ts << 'HANDLER_EOF'
-import type { ExecuteJobResult } from "../../../runtime/offeringTypes.js";
+cat > druck-tracking-volume-handler.js << 'HANDLER_EOF'
 
 /**
  * Druckenmiller Agent Job: Tracking Volume Schema
- * cron: "*/10 * * * *"  — Every 10 minutes
+ * cron: "*\/10 * * * *"  — Every 10 minutes
  *
  * Druckenmiller: "Volume is the footprint of money. Follow the footprint."
  *
@@ -1259,36 +1260,38 @@ const COINGECKO_BASE = "https://api.coingecko.com/api/v3";
 const DEFILLAMA_BASE = "https://api.llama.fi";
 const CG_KEY = process.env.COINGECKO_API_KEY || "";
 
-type VolumeQuality = "INSTITUTIONAL" | "ACCUMULATION" | "DISTRIBUTION" | "NOISE" | "DEAD";
-type VolumeSignal = "SPIKE" | "ELEVATED" | "NORMAL" | "DRY" | "DEAD";
+/** @typedef {"INSTITUTIONAL" | "ACCUMULATION" | "DISTRIBUTION" | "NOISE" | "DEAD"} VolumeQuality */
+/** @typedef {"SPIKE" | "ELEVATED" | "NORMAL" | "DRY" | "DEAD"} VolumeSignal */
 
-interface TokenVolumeProfile {
-  id: string;
-  symbol: string;
-  price_usd: number;
-  volume_24h: number;
-  market_cap: number;
-  volume_to_mcap_pct: number;
-  price_change_24h: number;
-  price_change_7d: number;
-  volume_signal: VolumeSignal;
-  volume_quality: VolumeQuality;
-  divergence: boolean;
-  divergence_type: "ACCUMULATION" | "DISTRIBUTION" | null;
-  druckenmiller_read: string;
-  alert: boolean;
-}
+/**
+ * @typedef {object} TokenVolumeProfile
+ * @property {string} id
+ * @property {string} symbol
+ * @property {number} price_usd
+ * @property {number} volume_24h
+ * @property {number} market_cap
+ * @property {number} volume_to_mcap_pct
+ * @property {number} price_change_24h
+ * @property {number} price_change_7d
+ * @property {VolumeSignal} volume_signal
+ * @property {VolumeQuality} volume_quality
+ * @property {boolean} divergence
+ * @property {"ACCUMULATION" | "DISTRIBUTION" | null} divergence_type
+ * @property {string} druckenmiller_read
+ * @property {boolean} alert
+ */
 
-interface DexVolumeProfile {
-  name: string;
-  chain: string;
-  volume_24h: number;
-  tvl: number;
-  volume_tvl_ratio: number;
-  velocity_signal: "HOT" | "ACTIVE" | "NORMAL" | "SLOW";
-}
+/**
+ * @typedef {object} DexVolumeProfile
+ * @property {string} name
+ * @property {string} chain
+ * @property {number} volume_24h
+ * @property {number} tvl
+ * @property {number} volume_tvl_ratio
+ * @property {"HOT" | "ACTIVE" | "NORMAL" | "SLOW"} velocity_signal
+ */
 
-function classifyVolumeSignal(volToMcap: number): VolumeSignal {
+function classifyVolumeSignal(volToMcap) {
   if (volToMcap > 0.25) return "SPIKE";
   if (volToMcap > 0.12) return "ELEVATED";
   if (volToMcap > 0.03) return "NORMAL";
@@ -1297,9 +1300,9 @@ function classifyVolumeSignal(volToMcap: number): VolumeSignal {
 }
 
 function classifyVolumeQuality(
-  priceChange24h: number,
-  volSignal: VolumeSignal
-): VolumeQuality {
+  priceChange24h,
+  volSignal
+) {
   const highVol = volSignal === "SPIKE" || volSignal === "ELEVATED";
   const priceFlat = Math.abs(priceChange24h) < 1.5;
   const priceUp = priceChange24h > 2;
@@ -1312,7 +1315,7 @@ function classifyVolumeQuality(
   return "NOISE";
 }
 
-function buildDruckRead(profile: Partial<TokenVolumeProfile>): string {
+function buildDruckRead(profile) {
   if (profile.volume_quality === "INSTITUTIONAL")
     return `Strong volume + price advance = institutional conviction. Druckenmiller would size this up if thesis is intact.`;
   if (profile.volume_quality === "ACCUMULATION")
@@ -1324,12 +1327,12 @@ function buildDruckRead(profile: Partial<TokenVolumeProfile>): string {
   return `Normal volume. No edge signal. Monitor for developing pattern.`;
 }
 
-export async function executeJob(request: Record<string, any>): Promise<ExecuteJobResult> {
-  const tokenIds: string[] = request.tokens || ["bitcoin", "ethereum", "solana", "avalanche-2", "near", "sui"];
+export async function executeJob(request) {
+  const tokenIds = request.tokens || ["bitcoin", "ethereum", "solana", "avalanche-2", "near", "sui"];
   const spikeMultiplier = Number(request.alert_spike_multiplier || 2.5);
   const includeDex = request.include_dex !== false;
 
-  const cgHeaders: Record<string, string> = CG_KEY ? { "x-cg-demo-api-key": CG_KEY } : {};
+  const cgHeaders = CG_KEY ? { "x-cg-demo-api-key": CG_KEY } : {};
 
   try {
     const [marketRes, dexRes] = await Promise.all([
@@ -1337,9 +1340,9 @@ export async function executeJob(request: Record<string, any>): Promise<ExecuteJ
       includeDex ? fetch(`${DEFILLAMA_BASE}/overview/dexs?excludeTotalDataChart=true&dataType=dailyVolume`) : Promise.resolve(null),
     ]);
 
-    const markets: any[] = marketRes.ok ? await marketRes.json() : [];
+    const markets = marketRes.ok ? await marketRes.json() : [];
 
-    const profiles: TokenVolumeProfile[] = markets.map(m => {
+    const profiles = markets.map(m => {
       const vol24h = m.total_volume || 0;
       const mcap = m.market_cap || 1;
       const vtm = (vol24h / mcap) * 100;
@@ -1349,7 +1352,7 @@ export async function executeJob(request: Record<string, any>): Promise<ExecuteJ
       const volQ = classifyVolumeQuality(pc24h, volSig);
       const divergence = (volSig === "SPIKE" || volSig === "ELEVATED") && Math.abs(pc24h) < 1.5;
 
-      const partial: Partial<TokenVolumeProfile> = { volume_quality: volQ };
+      const partial = { volume_quality: volQ };
       const drRead = buildDruckRead(partial);
 
       return {
@@ -1371,7 +1374,7 @@ export async function executeJob(request: Record<string, any>): Promise<ExecuteJ
     });
 
     // DEX volumes
-    const dexProfiles: DexVolumeProfile[] = [];
+    const dexProfiles = [];
     if (includeDex && dexRes?.ok) {
       const dexData = await dexRes.json();
       for (const p of (dexData.protocols || []).slice(0, 12)) {
@@ -1422,14 +1425,13 @@ export async function executeJob(request: Record<string, any>): Promise<ExecuteJ
         })),
       }),
     };
-  } catch (e: any) {
+  } catch (e) {
     return { deliverable: JSON.stringify({ schema: "druckenmiller_tracking_volume", error: e.message }) };
   }
 }
 HANDLER_EOF
 
-cat > druckenmiller-soul-handler.ts << 'HANDLER_EOF'
-import type { ExecuteJobResult } from "../../../runtime/offeringTypes.js";
+cat > druckenmiller-soul-handler.js << 'HANDLER_EOF'
 
 /**
  * Druckenmiller Agent Job: Soul Schema
@@ -1503,16 +1505,17 @@ import type { ExecuteJobResult } from "../../../runtime/offeringTypes.js";
 
 // ─── DRUCKENMILLER PRINCIPLES ────────────────────────────────────────────────
 
-interface Principle {
-  id: string;
-  name: string;
-  quote: string;
-  description: string;
-  audit_questions: string[];
-  failure_modes: string[];
-}
+/**
+ * @typedef {object} Principle
+ * @property {string} id
+ * @property {string} name
+ * @property {string} quote
+ * @property {string} description
+ * @property {string[]} audit_questions
+ * @property {string[]} failure_modes
+ */
 
-const DRUCKENMILLER_PRINCIPLES: Principle[] = [
+const DRUCKENMILLER_PRINCIPLES = [
   {
     id: "macro_first",
     name: "Macro Is the Prime Mover",
@@ -1653,21 +1656,22 @@ const DRUCKENMILLER_PRINCIPLES: Principle[] = [
 
 // ─── MACRO REGIME ENGINE ─────────────────────────────────────────────────────
 
-type MacroRegime = "RISK_ON_BULL" | "RISK_ON_FRAGILE" | "TRANSITIONAL" | "RISK_OFF_BEAR" | "CRISIS";
+/** @typedef {"RISK_ON_BULL" | "RISK_ON_FRAGILE" | "TRANSITIONAL" | "RISK_OFF_BEAR" | "CRISIS"} MacroRegime */
 
-interface MacroAssessment {
-  regime: MacroRegime;
-  regime_label: string;
-  liquidity_score: number;    // 0–10 (10 = abundant liquidity)
-  rate_headwind: boolean;
-  usd_risk: "TAILWIND" | "NEUTRAL" | "HEADWIND";
-  btc_macro_read: string;
-  positioning_bias: "AGGRESSIVE_LONG" | "MODERATE_LONG" | "NEUTRAL" | "MODERATE_SHORT" | "AGGRESSIVE_SHORT";
-  max_gross_exposure_pct: number;
-  druckenmiller_take: string;
-}
+/**
+ * @typedef {object} MacroAssessment
+ * @property {MacroRegime} regime
+ * @property {string} regime_label
+ * @property {number} liquidity_score  0–10 (10 = abundant liquidity)
+ * @property {boolean} rate_headwind
+ * @property {"TAILWIND" | "NEUTRAL" | "HEADWIND"} usd_risk
+ * @property {string} btc_macro_read
+ * @property {"AGGRESSIVE_LONG" | "MODERATE_LONG" | "NEUTRAL" | "MODERATE_SHORT" | "AGGRESSIVE_SHORT"} positioning_bias
+ * @property {number} max_gross_exposure_pct
+ * @property {string} druckenmiller_take
+ */
 
-function assessMacroRegime(macro: Record<string, any>): MacroAssessment {
+function assessMacroRegime(macro) {
   const fed = (macro.fed_stance || "neutral").toLowerCase();
   const curve = (macro.yield_curve || "flat").toLowerCase();
   const dxy = (macro.dxy_trend || "flat").toLowerCase();
@@ -1684,7 +1688,7 @@ function assessMacroRegime(macro: Record<string, any>): MacroAssessment {
   if (curve === "inverted") liquidityScore -= 1;
   liquidityScore = Math.max(0, Math.min(10, liquidityScore));
 
-  const regime: MacroRegime =
+  const regime =
     liquidityScore >= 8 && riskAppetite === "risk_on"
       ? "RISK_ON_BULL"
       : liquidityScore >= 6 && riskAppetite !== "risk_off"
@@ -1695,7 +1699,7 @@ function assessMacroRegime(macro: Record<string, any>): MacroAssessment {
       ? "RISK_OFF_BEAR"
       : "CRISIS";
 
-  const regimeLabels: Record<MacroRegime, string> = {
+  const regimeLabels = {
     RISK_ON_BULL: "Risk-On Bull — Maximum Offense",
     RISK_ON_FRAGILE: "Risk-On Fragile — Selective Offense",
     TRANSITIONAL: "Transitional — Reduce Exposure, Wait for Clarity",
@@ -1703,7 +1707,7 @@ function assessMacroRegime(macro: Record<string, any>): MacroAssessment {
     CRISIS: "Crisis — Capital Preservation Only",
   };
 
-  const positioning: MacroAssessment["positioning_bias"] =
+  const positioning =
     regime === "RISK_ON_BULL"
       ? "AGGRESSIVE_LONG"
       : regime === "RISK_ON_FRAGILE"
@@ -1754,21 +1758,22 @@ function assessMacroRegime(macro: Record<string, any>): MacroAssessment {
 
 // ─── POSITION AUDIT ──────────────────────────────────────────────────────────
 
-interface PositionAudit {
-  asset: string;
-  direction: string;
-  conviction: number;
-  reward_risk_ratio: number | null;
-  asymmetry_grade: "HOME_RUN" | "EXCELLENT" | "ACCEPTABLE" | "MARGINAL" | "REJECT";
-  size_vs_conviction: "UNDERSIZED" | "APPROPRIATE" | "OVERSIZED";
-  thesis_health: "INTACT" | "WEAKENING" | "BROKEN";
-  action: "ADD" | "HOLD" | "TRIM" | "EXIT_NOW";
-  days_held: number;
-  pnl_pct: number | null;
-  druckenmiller_verdict: string;
-}
+/**
+ * @typedef {object} PositionAudit
+ * @property {string} asset
+ * @property {string} direction
+ * @property {number} conviction
+ * @property {number | null} reward_risk_ratio
+ * @property {"HOME_RUN" | "EXCELLENT" | "ACCEPTABLE" | "MARGINAL" | "REJECT"} asymmetry_grade
+ * @property {"UNDERSIZED" | "APPROPRIATE" | "OVERSIZED"} size_vs_conviction
+ * @property {"INTACT" | "WEAKENING" | "BROKEN"} thesis_health
+ * @property {"ADD" | "HOLD" | "TRIM" | "EXIT_NOW"} action
+ * @property {number} days_held
+ * @property {number | null} pnl_pct
+ * @property {string} druckenmiller_verdict
+ */
 
-function auditPosition(pos: Record<string, any>, macroRegime: MacroRegime): PositionAudit {
+function auditPosition(pos, macroRegime) {
   const entry = Number(pos.entry_price || 0);
   const current = Number(pos.current_price || entry);
   const target = Number(pos.target_price || 0);
@@ -1787,7 +1792,7 @@ function auditPosition(pos: Record<string, any>, macroRegime: MacroRegime): Posi
       : null;
 
   // Reward/risk ratio
-  let rrRatio: number | null = null;
+  let rrRatio = null;
   if (entry > 0 && target > 0 && stop > 0) {
     const reward =
       direction === "long" ? target - current : current - target;
@@ -1796,7 +1801,7 @@ function auditPosition(pos: Record<string, any>, macroRegime: MacroRegime): Posi
     rrRatio = risk > 0 ? Math.round((reward / risk) * 10) / 10 : null;
   }
 
-  const asymmetryGrade: PositionAudit["asymmetry_grade"] =
+  const asymmetryGrade =
     rrRatio == null ? "ACCEPTABLE" :
     rrRatio >= 8 ? "HOME_RUN" :
     rrRatio >= 4 ? "EXCELLENT" :
@@ -1810,20 +1815,20 @@ function auditPosition(pos: Record<string, any>, macroRegime: MacroRegime): Posi
   const expectedMaxSize =
     conviction >= 8 ? 35 : conviction >= 5 ? 15 : 5;
 
-  const sizeVsConviction: PositionAudit["size_vs_conviction"] =
+  const sizeVsConviction =
     sizePct < expectedMinSize ? "UNDERSIZED" :
     sizePct > expectedMaxSize ? "OVERSIZED" :
     "APPROPRIATE";
 
   // Thesis health
-  const thesisHealth: PositionAudit["thesis_health"] =
+  const thesisHealth =
     !thesisIntact ? "BROKEN" :
     (macroRegime === "RISK_OFF_BEAR" || macroRegime === "CRISIS") && direction === "long" ? "WEAKENING" :
     (macroRegime === "RISK_ON_BULL") && direction === "short" ? "WEAKENING" :
     "INTACT";
 
   // Action
-  const action: PositionAudit["action"] =
+  const action =
     thesisHealth === "BROKEN" ? "EXIT_NOW" :
     asymmetryGrade === "REJECT" ? "EXIT_NOW" :
     thesisHealth === "INTACT" && conviction >= 8 && sizeVsConviction === "UNDERSIZED" ? "ADD" :
@@ -1831,7 +1836,7 @@ function auditPosition(pos: Record<string, any>, macroRegime: MacroRegime): Posi
     "HOLD";
 
   // Druckenmiller verdict
-  const verdicts: Record<PositionAudit["action"], string> = {
+  const verdicts = {
     ADD: `Conviction ${conviction}/10 with thesis intact and ${rrRatio?.toFixed(1) ?? "?"}:1 reward/risk. This is UNDERSIZED. Druckenmiller would press this position. Size up.`,
     HOLD: `Thesis intact. Reward/risk ${rrRatio?.toFixed(1) ?? "?"}:1. Hold and monitor for ADD opportunity on pullbacks.`,
     TRIM: `Thesis weakening — macro regime or fundamentals shifting against position. Trim to core size. Keep stop tight.`,
@@ -1855,16 +1860,17 @@ function auditPosition(pos: Record<string, any>, macroRegime: MacroRegime): Posi
 
 // ─── BEHAVIORAL AUDIT ────────────────────────────────────────────────────────
 
-interface BehaviorAudit {
-  score: number;           // 0–100
-  grade: "DRUCKENMILLER" | "DISCIPLINED" | "DEVELOPING" | "DRIFTING" | "AMATEUR";
-  flags: string[];
-  commendations: string[];
-}
+/**
+ * @typedef {object} BehaviorAudit
+ * @property {number} score  0–100
+ * @property {"DRUCKENMILLER" | "DISCIPLINED" | "DEVELOPING" | "DRIFTING" | "AMATEUR"} grade
+ * @property {string[]} flags
+ * @property {string[]} commendations
+ */
 
-function auditBehavior(request: Record<string, any>, positionAudits: PositionAudit[]): BehaviorAudit {
-  const flags: string[] = [];
-  const commendations: string[] = [];
+function auditBehavior(request, positionAudits) {
+  const flags = [];
+  const commendations = [];
   let score = 100;
 
   // Best idea sizing
@@ -1883,7 +1889,7 @@ function auditBehavior(request: Record<string, any>, positionAudits: PositionAud
   }
 
   // Recent decisions
-  const decisions: Array<{ decision: string; outcome: string }> = request.recent_decisions || [];
+  const decisions = request.recent_decisions || [];
   for (const d of decisions) {
     const dec = d.decision.toLowerCase();
     const out = d.outcome.toLowerCase();
@@ -1920,7 +1926,7 @@ function auditBehavior(request: Record<string, any>, positionAudits: PositionAud
 
   score = Math.max(0, score);
 
-  const grade: BehaviorAudit["grade"] =
+  const grade =
     score >= 90 ? "DRUCKENMILLER" :
     score >= 75 ? "DISCIPLINED" :
     score >= 55 ? "DEVELOPING" :
@@ -1952,8 +1958,8 @@ const DRUCKENMILLER_QUOTES = [
 // ─── MAIN ────────────────────────────────────────────────────────────────────
 
 export async function executeJob(
-  request: Record<string, any>
-): Promise<ExecuteJobResult> {
+  request
+) {
   const cycleNumber = Number(request.cycle_number || 1);
   const equity = Number(request.account_equity || 50000);
   const hwm = Number(request.high_water_mark || equity);
@@ -1964,8 +1970,8 @@ export async function executeJob(
   const macroAssessment = assessMacroRegime(macroInputs);
 
   // ── Position audits ──
-  const positions: Record<string, any>[] = request.positions || [];
-  const positionAudits: PositionAudit[] = positions.map((p) =>
+  const positions = request.positions || [];
+  const positionAudits = positions.map((p) =>
     auditPosition(p, macroAssessment.regime)
   );
 
@@ -2090,12 +2096,11 @@ export async function executeJob(
 }
 HANDLER_EOF
 
-cat > fraxtal-suggestions-handler.ts << 'HANDLER_EOF'
-import type { ExecuteJobResult } from "../../../runtime/offeringTypes.js";
+cat > fraxtal-suggestions-handler.js << 'HANDLER_EOF'
 
 /**
  * Seykota Agent Job: Fraxtal Suggestions Schema
- * cron: "0 */6 * * *"  — Every 6 hours
+ * cron: "0 *\/6 * * *"  — Every 6 hours
  *
  * Generates Fraxtal-specific actionable suggestions: protocol yield opportunities,
  * FXTL points farming windows, frxETH/sfrxETH yield vs. alternatives,
@@ -2122,32 +2127,33 @@ const CG_KEY = process.env.COINGECKO_API_KEY || "";
 
 const FRAXTAL_CHAIN = "Fraxtal";
 
-type RiskTier = "normal" | "reduced" | "defensive" | "survival";
+/** @typedef {"normal" | "reduced" | "defensive" | "survival"} RiskTier */
 
-interface FraxtalSuggestion {
-  id: string;
-  priority: "HIGH" | "MEDIUM" | "LOW";
-  category: "Yield" | "Points" | "Liquidity" | "Risk" | "Rotation" | "Volatility";
-  action: string;
-  rationale: string;
-  signal: string;
-  expected_apy_range?: string;
-  risk_note?: string;
-  applicable_tiers: RiskTier[];
-}
+/**
+ * @typedef {object} FraxtalSuggestion
+ * @property {string} id
+ * @property {"HIGH" | "MEDIUM" | "LOW"} priority
+ * @property {"Yield" | "Points" | "Liquidity" | "Risk" | "Rotation" | "Volatility"} category
+ * @property {string} action
+ * @property {string} rationale
+ * @property {string} signal
+ * @property {string} [expected_apy_range]
+ * @property {string} [risk_note]
+ * @property {RiskTier[]} applicable_tiers
+ */
 
-const RISK_TIER_ORDER: Record<RiskTier, number> = {
+const RISK_TIER_ORDER = {
   normal: 0,
   reduced: 1,
   defensive: 2,
   survival: 3,
 };
 
-function tierAllowed(suggestion: FraxtalSuggestion, tier: RiskTier): boolean {
+function tierAllowed(suggestion, tier) {
   return suggestion.applicable_tiers.includes(tier);
 }
 
-function buildStaticSuggestions(): FraxtalSuggestion[] {
+function buildStaticSuggestions() {
   return [
     // ── Yield ──────────────────────────────────────────────────────────────
     {
@@ -2247,26 +2253,26 @@ function buildStaticSuggestions(): FraxtalSuggestion[] {
 }
 
 export async function executeJob(
-  request: Record<string, any>
-): Promise<ExecuteJobResult> {
-  const riskTier: RiskTier = (request.risk_tier as RiskTier) || "normal";
+  request
+) {
+  const riskTier = (request.risk_tier) || "normal";
   const equity = Number(request.account_equity || 10000);
   const fraxtalAllocPct = Number(request.fraxtal_allocation_pct || 20);
-  const holdings: string[] = (request.holding || []).map((h: string) =>
+  const holdings = (request.holding || []).map((h) =>
     h.toLowerCase()
   );
 
-  const cgHeaders: Record<string, string> = {
+  const cgHeaders = {
     ...(CG_KEY ? { "x-cg-demo-api-key": CG_KEY } : {}),
   };
 
   // ── Fetch live Fraxtal TVL ──
-  let fraxtalTvl: number | null = null;
-  let fraxtalTvlChange7d: number | null = null;
-  let fraxtalDexVol: number | null = null;
-  let fxsPrice: number | null = null;
-  let fxsChange7d: number | null = null;
-  let fraxPeg: number | null = null;
+  let fraxtalTvl = null;
+  let fraxtalTvlChange7d = null;
+  let fraxtalDexVol = null;
+  let fxsPrice = null;
+  let fxsChange7d = null;
+  let fraxPeg = null;
 
   try {
     const [chainRes, cgRes] = await Promise.all([
@@ -2278,7 +2284,7 @@ export async function executeJob(
     ]);
 
     if (chainRes.ok) {
-      const chains: any[] = await chainRes.json();
+      const chains = await chainRes.json();
       const fraxtal = chains.find(
         (c) => c.name?.toLowerCase() === "fraxtal"
       );
@@ -2316,7 +2322,7 @@ export async function executeJob(
   let active = staticSuggestions.filter((s) => tierAllowed(s, riskTier));
 
   // ── Dynamic suggestions from live data ──
-  const dynamic: FraxtalSuggestion[] = [];
+  const dynamic = [];
 
   // FRAX depeg alert (highest priority)
   if (fraxPeg !== null && fraxPeg < 0.99) {
@@ -2423,8 +2429,7 @@ export async function executeJob(
 }
 HANDLER_EOF
 
-cat > handlers.ts << 'HANDLER_EOF'
-import type { ExecuteJobResult } from "../../../runtime/offeringTypes.js";
+cat > handlers.js << 'HANDLER_EOF'
 
 /**
  * Seykota Agent Job: Base Chain NFT Transfer Scanner
@@ -2444,35 +2449,36 @@ import type { ExecuteJobResult } from "../../../runtime/offeringTypes.js";
 const BASESCAN_API = "https://api.basescan.org/api";
 const BASESCAN_KEY = process.env.BASESCAN_API_KEY || "";
 
-interface Transfer {
-  hash: string;
-  blockNumber: string;
-  timeStamp: string;
-  from: string;
-  to: string;
-  tokenID: string;
-  tokenName: string;
-  tokenSymbol: string;
-  gasUsed: string;
-  gasPrice: string;
-}
+/**
+ * @typedef {object} Transfer
+ * @property {string} hash
+ * @property {string} blockNumber
+ * @property {string} timeStamp
+ * @property {string} from
+ * @property {string} to
+ * @property {string} tokenID
+ * @property {string} tokenName
+ * @property {string} tokenSymbol
+ * @property {string} gasUsed
+ * @property {string} gasPrice
+ */
 
-function shortAddr(addr: string): string {
+function shortAddr(addr) {
   return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 }
 
-function tsToDate(ts: string): string {
+function tsToDate(ts) {
   return new Date(Number(ts) * 1000).toISOString().replace("T", " ").slice(0, 19) + " UTC";
 }
 
-function gweiToEth(gasUsed: string, gasPrice: string): string {
+function gweiToEth(gasUsed, gasPrice) {
   const fee = (Number(gasUsed) * Number(gasPrice)) / 1e18;
   return fee.toFixed(6);
 }
 
 export async function executeJob(
-  request: Record<string, any>
-): Promise<ExecuteJobResult> {
+  request
+) {
 
   // ── Input normalization ──────────────────────────────────────────────────
   const contractAddress =
@@ -2487,7 +2493,7 @@ export async function executeJob(
     request.id ||
     null;
 
-  const standard: "ERC721" | "ERC1155" =
+  const standard =
     (request.token_standard || request.standard || "ERC721")
       .toUpperCase()
       .includes("1155")
@@ -2540,7 +2546,7 @@ export async function executeJob(
   }
 
   // ── Fetch transfers ───────────────────────────────────────────────────────
-  let raw: Transfer[] = [];
+  let raw = [];
   try {
     const res = await fetch(`${BASESCAN_API}?${params.toString()}`);
     if (!res.ok) throw new Error(`Basescan HTTP ${res.status}`);
@@ -2568,8 +2574,8 @@ export async function executeJob(
       throw new Error(json.message || "Basescan error");
     }
 
-    raw = json.result as Transfer[];
-  } catch (e: any) {
+    raw = json.result;
+  } catch (e) {
     return {
       deliverable: JSON.stringify({
         error: `Failed to fetch from Basescan: ${e.message}`,
@@ -2632,12 +2638,11 @@ export async function executeJob(
 }
 HANDLER_EOF
 
-cat > nodle-micro-swaps-handler.ts << 'HANDLER_EOF'
-import type { ExecuteJobResult } from "../../../runtime/offeringTypes.js";
+cat > nodle-micro-swaps-handler.js << 'HANDLER_EOF'
 
 /**
  * Orchestrator Sub-Function: nodle_micro-swaps
- * cron: "0 */4 * * *"  — Every 4 hours
+ * cron: "0 *\/4 * * *"  — Every 4 hours
  *
  * Independent of signal alignment — runs on its own fixed schedule
  * regardless of what Seykota/Druckenmiller signal. Performs small,
@@ -2683,23 +2688,24 @@ const VIRTUAL_BASE = "0x0b3e328455c4059EEb9e3f84b5543F74E24e7E1b";
 const COINGECKO_BASE = "https://api.coingecko.com/api/v3";
 const CG_KEY = process.env.COINGECKO_API_KEY || "";
 
-interface MicroSwapResult {
-  pair: string;
-  dex: string;
-  amount_in_usdc: number;
-  estimated_amount_out_virtual: number | null;
-  price_impact_bps: number | null;
-  router_used: string | null;
-  rpc_used: string | null;
-  status: "EXECUTED" | "FAILED" | "ABORTED_HIGH_IMPACT" | "DRY_RUN" | "PLANNED";
-  tx_hash: string | null;
-  error: string | null;
-  cumulative_tracking: { note: string };
-}
+/**
+ * @typedef {object} MicroSwapResult
+ * @property {string} pair
+ * @property {string} dex
+ * @property {number} amount_in_usdc
+ * @property {number | null} estimated_amount_out_virtual
+ * @property {number | null} price_impact_bps
+ * @property {string | null} router_used
+ * @property {string | null} rpc_used
+ * @property {"EXECUTED" | "FAILED" | "ABORTED_HIGH_IMPACT" | "DRY_RUN" | "PLANNED"} status
+ * @property {string | null} tx_hash
+ * @property {string | null} error
+ * @property {{ note: string }} cumulative_tracking
+ */
 
-async function getVirtualPrice(): Promise<{ price_usd: number | null; price_change_24h: number | null }> {
+async function getVirtualPrice() {
   try {
-    const headers: Record<string, string> = CG_KEY ? { "x-cg-demo-api-key": CG_KEY } : {};
+    const headers = CG_KEY ? { "x-cg-demo-api-key": CG_KEY } : {};
     const res = await fetch(
       `${COINGECKO_BASE}/simple/price?ids=virtual-protocol&vs_currencies=usd&include_24hr_change=true`,
       { headers }
@@ -2716,14 +2722,14 @@ async function getVirtualPrice(): Promise<{ price_usd: number | null; price_chan
 }
 
 async function executeMicroSwap(
-  amountUsdc: number,
-  virtualPrice: number | null,
-  maxPriceImpactBps: number,
-  dryRun: boolean
-): Promise<MicroSwapResult> {
+  amountUsdc,
+  virtualPrice,
+  maxPriceImpactBps,
+  dryRun
+) {
   const estimatedOut = virtualPrice && virtualPrice > 0 ? amountUsdc / virtualPrice : null;
 
-  const baseResult: MicroSwapResult = {
+  const baseResult = {
     pair: "USDC/VIRTUAL",
     dex: "aerodrome",
     amount_in_usdc: amountUsdc,
@@ -2763,8 +2769,8 @@ async function executeMicroSwap(
     };
   }
 
-  const routerAttempts: Array<keyof typeof ROUTER_CONFIG> = ["primary", "fallback_1", "fallback_2"];
-  const rpcAttempts: Array<keyof typeof RPC_CONFIG> = ["primary", "fallback_1", "fallback_2"];
+  const routerAttempts = ["primary", "fallback_1", "fallback_2"];
+  const rpcAttempts = ["primary", "fallback_1", "fallback_2"];
 
   for (const routerKey of routerAttempts) {
     const router = ROUTER_CONFIG[routerKey];
@@ -2818,7 +2824,7 @@ async function executeMicroSwap(
   };
 }
 
-export async function executeJob(request: Record<string, any>): Promise<ExecuteJobResult> {
+export async function executeJob(request) {
   const amountUsdc = Number(request.swap_amount_usdc ?? 10);
   const maxPriceImpactBps = Number(request.max_price_impact_bps ?? 50);
   const dryRun = request.dry_run === true;
@@ -2849,12 +2855,11 @@ export async function executeJob(request: Record<string, any>): Promise<ExecuteJ
 }
 HANDLER_EOF
 
-cat > suggestions-handler.ts << 'HANDLER_EOF'
-import type { ExecuteJobResult } from "../../../runtime/offeringTypes.js";
+cat > suggestions-handler.js << 'HANDLER_EOF'
 
 /**
  * Seykota Agent Job: Suggestions Schema
- * cron: "0 */4 * * *"  — Every 4 hours
+ * cron: "0 *\/4 * * *"  — Every 4 hours
  *
  * Generates actionable trading/farming suggestions based on current
  * market conditions across vol regime, funding, LP health, and chain TVL.
@@ -2872,40 +2877,41 @@ const COINGECKO_BASE = "https://api.coingecko.com/api/v3";
 const DEFILLAMA_BASE = "https://api.llama.fi";
 const CG_KEY = process.env.COINGECKO_API_KEY || "";
 
-type RiskTier = "normal" | "reduced" | "defensive" | "survival";
-type Context = "volatility" | "farming" | "l1" | "base" | "all";
+/** @typedef {"normal" | "reduced" | "defensive" | "survival"} RiskTier */
+/** @typedef {"volatility" | "farming" | "l1" | "base" | "all"} Context */
 
-interface Suggestion {
-  id: string;
-  priority: "HIGH" | "MEDIUM" | "LOW";
-  category: string;
-  action: string;
-  rationale: string;
-  signal: string;
-  risk_tier_min: RiskTier;
-  data_point?: string;
-}
+/**
+ * @typedef {object} Suggestion
+ * @property {string} id
+ * @property {"HIGH" | "MEDIUM" | "LOW"} priority
+ * @property {string} category
+ * @property {string} action
+ * @property {string} rationale
+ * @property {string} signal
+ * @property {RiskTier} risk_tier_min
+ * @property {string} [data_point]
+ */
 
-const RISK_ORDER: Record<RiskTier, number> = {
+const RISK_ORDER = {
   normal: 0,
   reduced: 1,
   defensive: 2,
   survival: 3,
 };
 
-function tierAllowed(jobTier: RiskTier, positionTier: RiskTier): boolean {
+function tierAllowed(jobTier, positionTier) {
   return RISK_ORDER[positionTier] <= RISK_ORDER[jobTier];
 }
 
 function buildSuggestions(
-  markets: any[],
-  tvlChains: any[],
-  context: Context,
-  riskTier: RiskTier,
-  equity: number,
-  activePositions: string[]
-): Suggestion[] {
-  const suggestions: Suggestion[] = [];
+  markets,
+  tvlChains,
+  context,
+  riskTier,
+  equity,
+  activePositions
+) {
+  const suggestions = [];
 
   // ── Vol regime signal from price momentum ──
   const eth = markets.find((m) => m.id === "ethereum");
@@ -3047,16 +3053,16 @@ function buildSuggestions(
 }
 
 export async function executeJob(
-  request: Record<string, any>
-): Promise<ExecuteJobResult> {
-  const context: Context =
-    (request.context as Context) || "all";
-  const riskTier: RiskTier =
-    (request.risk_tier as RiskTier) || "normal";
+  request
+) {
+  const context =
+    (request.context) || "all";
+  const riskTier =
+    (request.risk_tier) || "normal";
   const equity = Number(request.account_equity || 10000);
-  const activePositions: string[] = request.active_positions || [];
+  const activePositions = request.active_positions || [];
 
-  const cgHeaders: Record<string, string> = {
+  const cgHeaders = {
     "Content-Type": "application/json",
     ...(CG_KEY ? { "x-cg-demo-api-key": CG_KEY } : {}),
   };
@@ -3105,7 +3111,7 @@ export async function executeJob(
         suggestions,
       }),
     };
-  } catch (e: any) {
+  } catch (e) {
     return {
       deliverable: JSON.stringify({
         schema: "suggestions",
@@ -3117,12 +3123,11 @@ export async function executeJob(
 }
 HANDLER_EOF
 
-cat > swap-orchestrator-handler.ts << 'HANDLER_EOF'
-import type { ExecuteJobResult } from "../../../runtime/offeringTypes.js";
+cat > swap-orchestrator-handler.js << 'HANDLER_EOF'
 
 /**
  * Swap Orchestrator Agent: Signal Alignment + Auto-Execution via CDP
- * cron: "*/15 * * * *"  — Every 15 minutes
+ * cron: "*\/15 * * * *"  — Every 15 minutes
  *
  * This agent does NOT generate its own market opinion. It consumes
  * signal output from two upstream agents:
@@ -3176,51 +3181,55 @@ const CDP_API_KEY_NAME = process.env.CDP_API_KEY_NAME || "";
 const CDP_API_KEY_PRIVATE_KEY = process.env.CDP_API_KEY_PRIVATE_KEY || "";
 const CDP_WALLET_ID = process.env.CDP_WALLET_ID || "";
 
-type Direction = "LONG" | "SHORT" | "NEUTRAL" | "CLOSE";
+/** @typedef {"LONG" | "SHORT" | "NEUTRAL" | "CLOSE"} Direction */
 
-interface SeykotaSignal {
-  asset: string;
-  score: number;          // -7 to +7
-  action: string;         // LONG | SHORT | CLOSE | HOLD
-  atr?: number;
-  current_price?: number;
-}
+/**
+ * @typedef {object} SeykotaSignal
+ * @property {string} asset
+ * @property {number} score  -7 to +7
+ * @property {string} action  LONG | SHORT | CLOSE | HOLD
+ * @property {number} [atr]
+ * @property {number} [current_price]
+ */
 
-interface DruckenmillerSignal {
-  asset: string;
-  fundamental_signal: string;  // STRONG_BUY | BUY | HOLD | SELL | STRONG_SELL
-  action: string;               // ADD | HOLD | TRIM | EXIT_NOW
-  reward_risk_ratio?: number;
-  conviction?: number;
-}
+/**
+ * @typedef {object} DruckenmillerSignal
+ * @property {string} asset
+ * @property {string} fundamental_signal  STRONG_BUY | BUY | HOLD | SELL | STRONG_SELL
+ * @property {string} action  ADD | HOLD | TRIM | EXIT_NOW
+ * @property {number} [reward_risk_ratio]
+ * @property {number} [conviction]
+ */
 
-interface AlignmentResult {
-  asset: string;
-  seykota_direction: Direction;
-  druckenmiller_direction: Direction;
-  aligned: boolean;
-  alignment_score: number;     // 0-100
-  combined_action: "EXECUTE_LONG" | "EXECUTE_SHORT" | "EXECUTE_CLOSE" | "NO_TRADE";
-  rationale: string;
-}
+/**
+ * @typedef {object} AlignmentResult
+ * @property {string} asset
+ * @property {Direction} seykota_direction
+ * @property {Direction} druckenmiller_direction
+ * @property {boolean} aligned
+ * @property {number} alignment_score  0-100
+ * @property {"EXECUTE_LONG" | "EXECUTE_SHORT" | "EXECUTE_CLOSE" | "NO_TRADE"} combined_action
+ * @property {string} rationale
+ */
 
-interface SwapPlan {
-  asset: string;
-  direction: Direction;
-  from_token: string;
-  to_token: string;
-  amount_usd: number;
-  router_attempted: string[];
-  router_used: string | null;
-  rpc_used: string | null;
-  status: "PLANNED" | "EXECUTED" | "FAILED" | "ABORTED_NO_ALIGNMENT" | "DRY_RUN";
-  tx_hash: string | null;
-  error: string | null;
-}
+/**
+ * @typedef {object} SwapPlan
+ * @property {string} asset
+ * @property {Direction} direction
+ * @property {string} from_token
+ * @property {string} to_token
+ * @property {number} amount_usd
+ * @property {string[]} router_attempted
+ * @property {string | null} router_used
+ * @property {string | null} rpc_used
+ * @property {"PLANNED" | "EXECUTED" | "FAILED" | "ABORTED_NO_ALIGNMENT" | "DRY_RUN"} status
+ * @property {string | null} tx_hash
+ * @property {string | null} error
+ */
 
 // ─── SIGNAL NORMALIZATION ────────────────────────────────────────────────────
 
-function seykotaToDirection(sig: SeykotaSignal): Direction {
+function seykotaToDirection(sig) {
   const action = (sig.action || "").toUpperCase();
   if (action === "LONG" || sig.score >= 5) return "LONG";
   if (action === "SHORT" || sig.score <= -5) return "SHORT";
@@ -3228,7 +3237,7 @@ function seykotaToDirection(sig: SeykotaSignal): Direction {
   return "NEUTRAL";
 }
 
-function druckenmillerToDirection(sig: DruckenmillerSignal): Direction {
+function druckenmillerToDirection(sig) {
   const fund = (sig.fundamental_signal || "").toUpperCase();
   const action = (sig.action || "").toUpperCase();
   if (action === "EXIT_NOW") return "CLOSE";
@@ -3240,10 +3249,10 @@ function druckenmillerToDirection(sig: DruckenmillerSignal): Direction {
 // ─── ALIGNMENT ENGINE ─────────────────────────────────────────────────────────
 
 function computeAlignment(
-  seykotaSig: SeykotaSignal | undefined,
-  druckSig: DruckenmillerSignal | undefined,
-  asset: string
-): AlignmentResult {
+  seykotaSig,
+  druckSig,
+  asset
+) {
   if (!seykotaSig || !druckSig) {
     return {
       asset,
@@ -3304,7 +3313,7 @@ function computeAlignment(
 
   score = Math.max(0, Math.min(100, Math.round(score)));
 
-  const combinedAction: AlignmentResult["combined_action"] =
+  const combinedAction =
     sDir === "LONG" ? "EXECUTE_LONG" :
     sDir === "SHORT" ? "EXECUTE_SHORT" :
     "NO_TRADE";
@@ -3335,7 +3344,7 @@ function computeAlignment(
  * shows the orchestration logic and router/RPC failover wiring — wire in
  * the actual @coinbase/coinbase-sdk calls in place of the placeholder.
  */
-async function executeSwapViaCDP(plan: SwapPlan, dryRun: boolean): Promise<SwapPlan> {
+async function executeSwapViaCDP(plan, dryRun) {
   if (dryRun) {
     return { ...plan, status: "DRY_RUN", router_used: ROUTER_CONFIG.primary.name, rpc_used: "primary" };
   }
@@ -3348,8 +3357,8 @@ async function executeSwapViaCDP(plan: SwapPlan, dryRun: boolean): Promise<SwapP
     };
   }
 
-  const routerAttempts: Array<keyof typeof ROUTER_CONFIG> = ["primary", "fallback_1", "fallback_2"];
-  const rpcAttempts: Array<keyof typeof RPC_CONFIG> = ["primary", "fallback_1", "fallback_2"];
+  const routerAttempts = ["primary", "fallback_1", "fallback_2"];
+  const rpcAttempts = ["primary", "fallback_1", "fallback_2"];
 
   for (const routerKey of routerAttempts) {
     const router = ROUTER_CONFIG[routerKey];
@@ -3387,7 +3396,7 @@ async function executeSwapViaCDP(plan: SwapPlan, dryRun: boolean): Promise<SwapP
             error: null,
           };
         }
-      } catch (e: any) {
+      } catch (e) {
         // Try next RPC, then next router
         continue;
       }
@@ -3404,22 +3413,22 @@ async function executeSwapViaCDP(plan: SwapPlan, dryRun: boolean): Promise<SwapP
 
 // ─── MAIN ────────────────────────────────────────────────────────────────────
 
-export async function executeJob(request: Record<string, any>): Promise<ExecuteJobResult> {
-  const seykotaSignals: SeykotaSignal[] = request.seykota_signals || [];
-  const druckSignals: DruckenmillerSignal[] = request.druckenmiller_signals || [];
+export async function executeJob(request) {
+  const seykotaSignals = request.seykota_signals || [];
+  const druckSignals = request.druckenmiller_signals || [];
   const portfolio = request.portfolio || { equity_usd: 10000, usdc_balance: 0, existing_positions: {} };
   const minAlignmentScore = Number(request.min_alignment_score ?? process.env.ORCHESTRATOR_MIN_ALIGNMENT_SCORE ?? 70);
   const maxSwapPct = Number(request.max_swap_pct ?? process.env.ORCHESTRATOR_MAX_SWAP_PCT ?? 10);
   const dryRun = request.dry_run === true;
 
   // Build asset universe from both signal sets
-  const allAssets = new Set<string>([
+  const allAssets = new Set([
     ...seykotaSignals.map(s => s.asset),
     ...druckSignals.map(s => s.asset),
   ]);
 
-  const alignments: AlignmentResult[] = [];
-  const swapPlans: SwapPlan[] = [];
+  const alignments = [];
+  const swapPlans = [];
 
   for (const asset of allAssets) {
     const sSig = seykotaSignals.find(s => s.asset === asset);
@@ -3433,7 +3442,7 @@ export async function executeJob(request: Record<string, any>): Promise<ExecuteJ
       const existingPos = portfolio.existing_positions?.[asset];
       if (!existingPos) continue; // nothing to close
 
-      const plan: SwapPlan = {
+      const plan = {
         asset,
         direction: "CLOSE",
         from_token: asset,
@@ -3473,9 +3482,9 @@ export async function executeJob(request: Record<string, any>): Promise<ExecuteJ
     const maxSwapUsd = (portfolio.equity_usd || 0) * (maxSwapPct / 100);
     const availableUsdc = portfolio.usdc_balance || 0;
 
-    let amountUsd: number;
-    let fromToken: string;
-    let toToken: string;
+    let amountUsd;
+    let fromToken;
+    let toToken;
 
     if (alignment.combined_action === "EXECUTE_LONG") {
       amountUsd = Math.min(maxSwapUsd, availableUsdc);
@@ -3506,7 +3515,7 @@ export async function executeJob(request: Record<string, any>): Promise<ExecuteJ
       continue;
     }
 
-    const plan: SwapPlan = {
+    const plan = {
       asset,
       direction: alignment.combined_action === "EXECUTE_LONG" ? "LONG" : "SHORT",
       from_token: fromToken,
@@ -3558,12 +3567,11 @@ export async function executeJob(request: Record<string, any>): Promise<ExecuteJ
 }
 HANDLER_EOF
 
-cat > tracking-chain-handler.ts << 'HANDLER_EOF'
-import type { ExecuteJobResult } from "../../../runtime/offeringTypes.js";
+cat > tracking-chain-handler.js << 'HANDLER_EOF'
 
 /**
  * Seykota Agent Job: Tracking Chain Schema
- * cron: "0 */4 * * *"  — Every 4 hours
+ * cron: "0 *\/4 * * *"  — Every 4 hours
  *
  * Tracks full chain-level health metrics: TVL, TVL momentum, active protocols,
  * DEX volume, stablecoin flows, bridge inflows/outflows, and fee revenue.
@@ -3581,38 +3589,41 @@ import type { ExecuteJobResult } from "../../../runtime/offeringTypes.js";
 
 const DEFILLAMA_BASE = "https://api.llama.fi";
 
-interface ChainSnapshot {
-  name: string;
-  tvl: number;
-  tvl_change_1d: number | null;
-  tvl_change_7d: number | null;
-  tvl_momentum: "INFLOW" | "OUTFLOW" | "STABLE";
-  tvl_rank: number;
-  dex_volume_24h: number | null;
-  fee_revenue_24h: number | null;
-  protocol_count: number | null;
-  dominant_protocol: string | null;
-  stablecoin_tvl: number | null;
-  chain_signal: "ACCUMULATING" | "DISTRIBUTING" | "NEUTRAL" | "WATCH";
-  alert: string | null;
-}
+/**
+ * @typedef {object} ChainSnapshot
+ * @property {string} name
+ * @property {number} tvl
+ * @property {number | null} tvl_change_1d
+ * @property {number | null} tvl_change_7d
+ * @property {"INFLOW" | "OUTFLOW" | "STABLE"} tvl_momentum
+ * @property {number} tvl_rank
+ * @property {number | null} dex_volume_24h
+ * @property {number | null} fee_revenue_24h
+ * @property {number | null} protocol_count
+ * @property {string | null} dominant_protocol
+ * @property {number | null} stablecoin_tvl
+ * @property {"ACCUMULATING" | "DISTRIBUTING" | "NEUTRAL" | "WATCH"} chain_signal
+ * @property {string | null} alert
+ */
 
-interface ProtocolEntry {
-  name: string;
-  chain: string;
-  tvl: number;
-  tvl_change_7d: number | null;
-  category: string;
-}
+/**
+ * @typedef {object} ProtocolEntry
+ * @property {string} name
+ * @property {string} chain
+ * @property {number} tvl
+ * @property {number | null} tvl_change_7d
+ * @property {string} category
+ */
 
-interface StablecoinEntry {
-  chain: string;
-  total_circulating: number;
-  change_7d: number | null;
-  dominant_stable: string | null;
-}
+/**
+ * @typedef {object} StablecoinEntry
+ * @property {string} chain
+ * @property {number} total_circulating
+ * @property {number | null} change_7d
+ * @property {string | null} dominant_stable
+ */
 
-function classifyMomentum(change7d: number | null): ChainSnapshot["tvl_momentum"] {
+function classifyMomentum(change7d) {
   if (change7d == null) return "STABLE";
   if (change7d > 3) return "INFLOW";
   if (change7d < -3) return "OUTFLOW";
@@ -3620,10 +3631,10 @@ function classifyMomentum(change7d: number | null): ChainSnapshot["tvl_momentum"
 }
 
 function buildChainSignal(
-  tvlChange7d: number | null,
-  dexVol: number | null,
-  tvl: number
-): ChainSnapshot["chain_signal"] {
+  tvlChange7d,
+  dexVol,
+  tvl
+) {
   const momentum = classifyMomentum(tvlChange7d);
   const volTvl = tvl > 0 && dexVol != null ? (dexVol / tvl) * 100 : null;
 
@@ -3637,7 +3648,7 @@ function buildChainSignal(
   return "NEUTRAL";
 }
 
-function buildAlert(snap: Partial<ChainSnapshot>): string | null {
+function buildAlert(snap) {
   if ((snap.tvl_change_7d ?? 0) < -15)
     return `MAJOR OUTFLOW: TVL dropped ${Math.abs(snap.tvl_change_7d ?? 0).toFixed(1)}% in 7 days — capital rotation in progress`;
   if ((snap.tvl_change_7d ?? 0) > 20)
@@ -3648,11 +3659,11 @@ function buildAlert(snap: Partial<ChainSnapshot>): string | null {
 }
 
 export async function executeJob(
-  request: Record<string, any>
-): Promise<ExecuteJobResult> {
-  const chainNames: string[] = (
+  request
+) {
+  const chainNames = (
     request.chains || ["base", "ethereum", "solana", "avalanche", "arbitrum", "optimism", "sui", "near"]
-  ).map((c: string) => c.toLowerCase());
+  ).map((c) => c.toLowerCase());
 
   const includeProtocols = request.include_protocols !== false;
   const includeStablecoins = request.include_stablecoins !== false;
@@ -3667,14 +3678,14 @@ export async function executeJob(
       fetch(`${DEFILLAMA_BASE}/overview/fees?excludeTotalDataChart=true&excludeTotalDataChartBreakdown=true&dataType=dailyFees`),
     ]);
 
-    const allChains: any[] = chainRes.ok ? await chainRes.json() : [];
-    const allProtocols: any[] = protocolRes?.ok ? (await protocolRes.json()) : [];
-    const stableData: any = stableRes?.ok ? await stableRes.json() : null;
-    const dexData: any = dexRes.ok ? await dexRes.json() : null;
-    const feesData: any = feesRes.ok ? await feesRes.json() : null;
+    const allChains = chainRes.ok ? await chainRes.json() : [];
+    const allProtocols = protocolRes?.ok ? (await protocolRes.json()) : [];
+    const stableData = stableRes?.ok ? await stableRes.json() : null;
+    const dexData = dexRes.ok ? await dexRes.json() : null;
+    const feesData = feesRes.ok ? await feesRes.json() : null;
 
     // ── Build DEX volume map by chain ──
-    const dexVolumeByChain: Record<string, number> = {};
+    const dexVolumeByChain = {};
     if (dexData?.protocols) {
       for (const p of dexData.protocols) {
         for (const chain of (p.chains || [])) {
@@ -3686,7 +3697,7 @@ export async function executeJob(
     }
 
     // ── Build fee revenue map by chain ──
-    const feesByChain: Record<string, number> = {};
+    const feesByChain = {};
     if (feesData?.protocols) {
       for (const p of feesData.protocols) {
         for (const chain of (p.chains || [])) {
@@ -3698,13 +3709,13 @@ export async function executeJob(
     }
 
     // ── Build stablecoin map by chain ──
-    const stableByChain: Record<string, StablecoinEntry> = {};
+    const stableByChain = {};
     if (stableData?.peggedAssets) {
       for (const asset of stableData.peggedAssets) {
         const chains = asset.chainCirculating || {};
         for (const [chainName, circData] of Object.entries(chains)) {
           const key = chainName.toLowerCase();
-          const circ = (circData as any)?.current?.peggedUSD || 0;
+          const circ = (circData)?.current?.peggedUSD || 0;
           if (!stableByChain[key]) {
             stableByChain[key] = {
               chain: chainName,
@@ -3720,13 +3731,13 @@ export async function executeJob(
 
     // ── Sort chains by TVL globally for rank ──
     const sortedAllChains = [...allChains].sort((a, b) => (b.tvl || 0) - (a.tvl || 0));
-    const rankMap: Record<string, number> = {};
+    const rankMap = {};
     sortedAllChains.forEach((c, i) => {
       rankMap[c.name?.toLowerCase()] = i + 1;
     });
 
     // ── Build chain snapshots ──
-    const snapshots: ChainSnapshot[] = [];
+    const snapshots = [];
 
     for (const name of chainNames) {
       const chainData = allChains.find(
@@ -3760,10 +3771,10 @@ export async function executeJob(
 
       // Top protocol for this chain
       const chainProtos = allProtocols
-        .filter((p) => (p.chains || []).map((c: string) => c.toLowerCase()).includes(name))
+        .filter((p) => (p.chains || []).map((c) => c.toLowerCase()).includes(name))
         .sort((a, b) => (b.tvl || 0) - (a.tvl || 0));
 
-      const snap: ChainSnapshot = {
+      const snap = {
         name: chainData.name,
         tvl,
         tvl_change_1d: change1d != null ? Math.round(change1d * 10) / 10 : null,
@@ -3785,11 +3796,11 @@ export async function executeJob(
     }
 
     // ── Top protocols per chain ──
-    const topProtocols: ProtocolEntry[] = includeProtocols
+    const topProtocols = includeProtocols
       ? chainNames.flatMap((name) => {
           return allProtocols
             .filter((p) =>
-              (p.chains || []).map((c: string) => c.toLowerCase()).includes(name)
+              (p.chains || []).map((c) => c.toLowerCase()).includes(name)
             )
             .sort((a, b) => (b.tvl || 0) - (a.tvl || 0))
             .slice(0, 5)
@@ -3847,7 +3858,7 @@ export async function executeJob(
         })),
       }),
     };
-  } catch (e: any) {
+  } catch (e) {
     return {
       deliverable: JSON.stringify({
         schema: "tracking_chain",
@@ -3859,12 +3870,11 @@ export async function executeJob(
 }
 HANDLER_EOF
 
-cat > tracking-coin-handler.ts << 'HANDLER_EOF'
-import type { ExecuteJobResult } from "../../../runtime/offeringTypes.js";
+cat > tracking-coin-handler.js << 'HANDLER_EOF'
 
 /**
  * Seykota Agent Job: Tracking Coin Schema
- * cron: "*/30 * * * *"  — Every 30 minutes
+ * cron: "*\/30 * * * *"  — Every 30 minutes
  *
  * Deep per-coin tracking: price, momentum, trend score, on-chain activity,
  * social sentiment signals, and vol-farming-specific metrics (IV proxy,
@@ -3881,39 +3891,42 @@ import type { ExecuteJobResult } from "../../../runtime/offeringTypes.js";
 const COINGECKO_BASE = "https://api.coingecko.com/api/v3";
 const CG_KEY = process.env.COINGECKO_API_KEY || "";
 
-interface PriceCandle {
-  timestamp: number;
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-}
+/**
+ * @typedef {object} PriceCandle
+ * @property {number} timestamp
+ * @property {number} open
+ * @property {number} high
+ * @property {number} low
+ * @property {number} close
+ */
 
-interface TrendScore {
-  score: number;         // -7 to +7 (Seykota EMA scoring)
-  label: string;
-  signals: Record<string, boolean>;
-}
+/**
+ * @typedef {object} TrendScore
+ * @property {number} score  -7 to +7 (Seykota EMA scoring)
+ * @property {string} label
+ * @property {Record<string, boolean>} signals
+ */
 
-interface VolMetrics {
-  realized_vol_7d: number;      // annualized %
-  high_low_range_7d: number;    // max drawdown in window
-  avg_daily_range: number;      // avg (high-low)/close %
-  vol_regime: "LOW" | "MEDIUM" | "HIGH" | "EXTREME";
-}
+/**
+ * @typedef {object} VolMetrics
+ * @property {number} realized_vol_7d  annualized %
+ * @property {number} high_low_range_7d  max drawdown in window
+ * @property {number} avg_daily_range  avg (high-low)/close %
+ * @property {"LOW" | "MEDIUM" | "HIGH" | "EXTREME"} vol_regime
+ */
 
-function calcEMA(prices: number[], period: number): number[] {
+function calcEMA(prices, period) {
   const k = 2 / (period + 1);
-  const ema: number[] = [prices[0]];
+  const ema = [prices[0]];
   for (let i = 1; i < prices.length; i++) {
     ema.push(prices[i] * k + ema[i - 1] * (1 - k));
   }
   return ema;
 }
 
-function calcRealizedVol(closes: number[]): number {
+function calcRealizedVol(closes) {
   if (closes.length < 2) return 0;
-  const returns: number[] = [];
+  const returns = [];
   for (let i = 1; i < closes.length; i++) {
     returns.push(Math.log(closes[i] / closes[i - 1]));
   }
@@ -3924,9 +3937,9 @@ function calcRealizedVol(closes: number[]): number {
   return Math.sqrt(variance) * Math.sqrt(365) * 100; // annualized %
 }
 
-function calcATR(candles: PriceCandle[]): number {
+function calcATR(candles) {
   if (candles.length < 2) return 0;
-  const trs: number[] = [];
+  const trs = [];
   for (let i = 1; i < candles.length; i++) {
     const prevClose = candles[i - 1].close;
     const tr = Math.max(
@@ -3940,9 +3953,9 @@ function calcATR(candles: PriceCandle[]): number {
 }
 
 function scoreTrend(
-  price: number,
-  closes: number[]
-): TrendScore {
+  price,
+  closes
+) {
   if (closes.length < 50) {
     return { score: 0, label: "INSUFFICIENT_DATA", signals: {} };
   }
@@ -3982,7 +3995,7 @@ function scoreTrend(
   return { score, label, signals };
 }
 
-function buildVolMetrics(candles: PriceCandle[]): VolMetrics {
+function buildVolMetrics(candles) {
   const closes = candles.map((c) => c.close);
   const rv = calcRealizedVol(closes);
   const allHighs = candles.map((c) => c.high);
@@ -3997,7 +4010,7 @@ function buildVolMetrics(candles: PriceCandle[]): VolMetrics {
   const avgDailyRange =
     dailyRanges.reduce((a, b) => a + b, 0) / dailyRanges.length;
 
-  const volRegime: VolMetrics["vol_regime"] =
+  const volRegime =
     rv > 150
       ? "EXTREME"
       : rv > 80
@@ -4015,14 +4028,14 @@ function buildVolMetrics(candles: PriceCandle[]): VolMetrics {
 }
 
 export async function executeJob(
-  request: Record<string, any>
-): Promise<ExecuteJobResult> {
-  const coinId: string =
+  request
+) {
+  const coinId =
     request.coin_id || request.id || request.token || "ethereum";
   const includeChart = request.include_market_chart !== false;
   const includeDev = request.include_developer === true;
 
-  const cgHeaders: Record<string, string> = {
+  const cgHeaders = {
     ...(CG_KEY ? { "x-cg-demo-api-key": CG_KEY } : {}),
   };
 
@@ -4057,9 +4070,9 @@ export async function executeJob(
     const md = detail.market_data || {};
 
     // ── Parse OHLC candles ──
-    let candles: PriceCandle[] = [];
+    let candles = [];
     if (chartRes?.ok) {
-      const raw: [number, number, number, number, number][] =
+      const raw =
         await chartRes.json();
       candles = raw.map(([ts, o, h, l, c]) => ({
         timestamp: ts,
@@ -4071,7 +4084,7 @@ export async function executeJob(
     }
 
     const closes = candles.map((c) => c.close);
-    const currentPrice: number = md.current_price?.usd || 0;
+    const currentPrice = md.current_price?.usd || 0;
 
     // ── Compute derived metrics ──
     const trendScore = closes.length >= 10 ? scoreTrend(currentPrice, closes) : null;
@@ -4165,7 +4178,7 @@ export async function executeJob(
         categories: detail.categories?.slice(0, 5) || [],
       }),
     };
-  } catch (e: any) {
+  } catch (e) {
     return {
       deliverable: JSON.stringify({
         schema: "tracking_coin",
@@ -4177,12 +4190,11 @@ export async function executeJob(
 }
 HANDLER_EOF
 
-cat > tracking-cross-chain-handler.ts << 'HANDLER_EOF'
-import type { ExecuteJobResult } from "../../../runtime/offeringTypes.js";
+cat > tracking-cross-chain-handler.js << 'HANDLER_EOF'
 
 /**
  * Seykota Agent Job: Tracking Cross-Chain Schema
- * cron: "0 */3 * * *"  — Every 3 hours
+ * cron: "0 *\/3 * * *"  — Every 3 hours
  *
  * Cross-chain intelligence layer: where is capital flowing BETWEEN chains?
  * Tracks bridge volumes, net flows, TVL momentum differentials, stablecoin
@@ -4208,47 +4220,51 @@ import type { ExecuteJobResult } from "../../../runtime/offeringTypes.js";
 
 const DEFILLAMA_BASE = "https://api.llama.fi";
 
-interface ChainFlowSummary {
-  chain: string;
-  tvl_usd: number;
-  tvl_change_1d_pct: number | null;
-  tvl_change_7d_pct: number | null;
-  tvl_momentum: "STRONG_INFLOW" | "INFLOW" | "STABLE" | "OUTFLOW" | "STRONG_OUTFLOW";
-  dex_volume_24h: number | null;
-  fee_revenue_24h: number | null;
-  bridge_inflow_24h: number | null;
-  bridge_outflow_24h: number | null;
-  bridge_net_flow_24h: number | null;
-  stablecoin_supply: number | null;
-  stablecoin_change_7d_pct: number | null;
-  capital_signal: "ACCUMULATE" | "HOLD" | "REDUCE" | "EXIT";
-  relative_rank: number;           // ranked by 7D TVL growth
-}
+/**
+ * @typedef {object} ChainFlowSummary
+ * @property {string} chain
+ * @property {number} tvl_usd
+ * @property {number | null} tvl_change_1d_pct
+ * @property {number | null} tvl_change_7d_pct
+ * @property {"STRONG_INFLOW" | "INFLOW" | "STABLE" | "OUTFLOW" | "STRONG_OUTFLOW"} tvl_momentum
+ * @property {number | null} dex_volume_24h
+ * @property {number | null} fee_revenue_24h
+ * @property {number | null} bridge_inflow_24h
+ * @property {number | null} bridge_outflow_24h
+ * @property {number | null} bridge_net_flow_24h
+ * @property {number | null} stablecoin_supply
+ * @property {number | null} stablecoin_change_7d_pct
+ * @property {"ACCUMULATE" | "HOLD" | "REDUCE" | "EXIT"} capital_signal
+ * @property {number} relative_rank  ranked by 7D TVL growth
+ */
 
-interface CrossChainFlow {
-  from_chain: string;
-  to_chain: string;
-  volume_24h: number;
-  bridge_name: string;
-}
+/**
+ * @typedef {object} CrossChainFlow
+ * @property {string} from_chain
+ * @property {string} to_chain
+ * @property {number} volume_24h
+ * @property {string} bridge_name
+ */
 
-interface YieldComparison {
-  chain: string;
-  best_stable_apy: number | null;
-  best_eth_lst_apy: number | null;
-  top_protocol: string | null;
-  yield_rank: number;
-}
+/**
+ * @typedef {object} YieldComparison
+ * @property {string} chain
+ * @property {number | null} best_stable_apy
+ * @property {number | null} best_eth_lst_apy
+ * @property {string | null} top_protocol
+ * @property {number} yield_rank
+ */
 
-interface RotationSignal {
-  type: "ROTATION" | "EXPANSION" | "CONTRACTION" | "CONSOLIDATION";
-  from_chain: string | null;
-  to_chain: string | null;
-  evidence: string;
-  confidence: "HIGH" | "MEDIUM" | "LOW";
-}
+/**
+ * @typedef {object} RotationSignal
+ * @property {"ROTATION" | "EXPANSION" | "CONTRACTION" | "CONSOLIDATION"} type
+ * @property {string | null} from_chain
+ * @property {string | null} to_chain
+ * @property {string} evidence
+ * @property {"HIGH" | "MEDIUM" | "LOW"} confidence
+ */
 
-function classifyMomentum(change7d: number | null): ChainFlowSummary["tvl_momentum"] {
+function classifyMomentum(change7d) {
   if (change7d == null) return "STABLE";
   if (change7d > 15) return "STRONG_INFLOW";
   if (change7d > 3) return "INFLOW";
@@ -4258,10 +4274,10 @@ function classifyMomentum(change7d: number | null): ChainFlowSummary["tvl_moment
 }
 
 function classifyCapitalSignal(
-  tvlChange7d: number | null,
-  bridgeNet: number | null,
-  stableChange: number | null
-): ChainFlowSummary["capital_signal"] {
+  tvlChange7d,
+  bridgeNet,
+  stableChange
+) {
   const tvlScore =
     (tvlChange7d ?? 0) > 10 ? 2 : (tvlChange7d ?? 0) > 3 ? 1 : (tvlChange7d ?? 0) < -10 ? -2 : (tvlChange7d ?? 0) < -3 ? -1 : 0;
   const bridgeScore =
@@ -4278,8 +4294,8 @@ function classifyCapitalSignal(
   return "EXIT";
 }
 
-function detectRotationSignals(chains: ChainFlowSummary[]): RotationSignal[] {
-  const signals: RotationSignal[] = [];
+function detectRotationSignals(chains) {
+  const signals = [];
   const sorted = [...chains].sort(
     (a, b) => (b.tvl_change_7d_pct ?? 0) - (a.tvl_change_7d_pct ?? 0)
   );
@@ -4331,14 +4347,14 @@ function detectRotationSignals(chains: ChainFlowSummary[]): RotationSignal[] {
 }
 
 export async function executeJob(
-  request: Record<string, any>
-): Promise<ExecuteJobResult> {
-  const chainNames: string[] = (
+  request
+) {
+  const chainNames = (
     request.chains || [
       "ethereum", "base", "fraxtal", "arbitrum", "optimism",
       "solana", "avalanche", "bsc", "sui", "near",
     ]
-  ).map((c: string) => c.toLowerCase());
+  ).map((c) => c.toLowerCase());
 
   const bridgeThreshold = Number(request.bridge_threshold_usd || 1_000_000);
   const alertNetFlow = Number(request.alert_net_flow_usd || 5_000_000);
@@ -4366,9 +4382,9 @@ export async function executeJob(
       ]);
 
     // ── Chain TVL map ──
-    const tvlMap: Record<string, { tvl: number; change1d: number | null; change7d: number | null }> = {};
+    const tvlMap = {};
     if (chainRes.ok) {
-      const chains: any[] = await chainRes.json();
+      const chains = await chainRes.json();
       for (const c of chains) {
         tvlMap[c.name?.toLowerCase()] = {
           tvl: c.tvl || 0,
@@ -4379,7 +4395,7 @@ export async function executeJob(
     }
 
     // ── DEX volume map by chain ──
-    const dexVolMap: Record<string, number> = {};
+    const dexVolMap = {};
     if (dexRes.ok) {
       const dexData = await dexRes.json();
       for (const p of dexData.protocols || []) {
@@ -4393,7 +4409,7 @@ export async function executeJob(
     }
 
     // ── Fee revenue map by chain ──
-    const feeMap: Record<string, number> = {};
+    const feeMap = {};
     if (feesRes.ok) {
       const feesData = await feesRes.json();
       for (const p of feesData.protocols || []) {
@@ -4407,7 +4423,7 @@ export async function executeJob(
     }
 
     // ── Stablecoin map by chain ──
-    const stableMap: Record<string, number> = {};
+    const stableMap = {};
     if (includeStable && stableRes?.ok) {
       const sd = await stableRes.json();
       for (const asset of sd.peggedAssets || []) {
@@ -4415,20 +4431,20 @@ export async function executeJob(
           asset.chainCirculating || {}
         )) {
           const key = chainName.toLowerCase();
-          const circ = (circData as any)?.current?.peggedUSD || 0;
+          const circ = (circData)?.current?.peggedUSD || 0;
           stableMap[key] = (stableMap[key] || 0) + circ;
         }
       }
     }
 
     // ── Bridge flows ──
-    const crossChainFlows: CrossChainFlow[] = [];
-    const bridgeNetByChain: Record<string, { in: number; out: number }> = {};
+    const crossChainFlows = [];
+    const bridgeNetByChain = {};
 
     if (bridgeRes.ok) {
       const bridgeData = await bridgeRes.json();
       for (const b of bridgeData.bridges || []) {
-        const bChains: string[] = (b.chains || []).map((c: string) =>
+        const bChains = (b.chains || []).map((c) =>
           c.toLowerCase()
         );
         const inflow = b.lastDayUsdTokenVolume || 0;
@@ -4459,11 +4475,11 @@ export async function executeJob(
     }
 
     // ── Yield comparison ──
-    const yieldMap: Record<string, YieldComparison> = {};
+    const yieldMap = {};
     if (includeYield && yieldRes?.ok) {
       try {
         const poolData = await yieldRes.json();
-        const pools: any[] = poolData.data || [];
+        const pools = poolData.data || [];
 
         for (const chain of chainNames) {
           const chainPools = pools
@@ -4513,7 +4529,7 @@ export async function executeJob(
     }
 
     // ── Build chain summaries ──
-    const chainSummaries: ChainFlowSummary[] = chainNames.map((name) => {
+    const chainSummaries = chainNames.map((name) => {
       const tvlData = tvlMap[name];
       const bridgeData = bridgeNetByChain[name];
       const bridgeNet = bridgeData
@@ -4555,7 +4571,7 @@ export async function executeJob(
     const rotationSignals = detectRotationSignals(chainSummaries);
 
     // ── Alerts ──
-    const alerts: string[] = [];
+    const alerts = [];
     for (const c of chainSummaries) {
       if (
         c.bridge_net_flow_24h != null &&
@@ -4604,7 +4620,7 @@ export async function executeJob(
           : [],
       }),
     };
-  } catch (e: any) {
+  } catch (e) {
     return {
       deliverable: JSON.stringify({
         schema: "tracking_cross_chain",
@@ -4616,12 +4632,11 @@ export async function executeJob(
 }
 HANDLER_EOF
 
-cat > tracking-fraxtal-volume-handler.ts << 'HANDLER_EOF'
-import type { ExecuteJobResult } from "../../../runtime/offeringTypes.js";
+cat > tracking-fraxtal-volume-handler.js << 'HANDLER_EOF'
 
 /**
  * Seykota Agent Job: Tracking Fraxtal Chain Volume Schema
- * cron: "*/20 * * * *"  — Every 20 minutes
+ * cron: "*\/20 * * * *"  — Every 20 minutes
  *
  * Deep volume tracking specific to the Fraxtal chain:
  *   - DEX volume by protocol (Fraxswap, Curve, Uniswap forks)
@@ -4646,56 +4661,60 @@ import type { ExecuteJobResult } from "../../../runtime/offeringTypes.js";
 const DEFILLAMA_BASE = "https://api.llama.fi";
 const FRAXTAL_CHAIN = "Fraxtal";
 
-interface ProtocolVolume {
-  name: string;
-  category: string;
-  volume_24h: number;
-  volume_7d_avg: number;
-  volume_ratio: number;          // 24h / 7d avg
-  tvl: number;
-  volume_tvl_ratio: number;      // efficiency: high = active relative to size
-  signal: "SPIKE" | "ELEVATED" | "NORMAL" | "LOW";
-}
+/**
+ * @typedef {object} ProtocolVolume
+ * @property {string} name
+ * @property {string} category
+ * @property {number} volume_24h
+ * @property {number} volume_7d_avg
+ * @property {number} volume_ratio  24h / 7d avg
+ * @property {number} tvl
+ * @property {number} volume_tvl_ratio  efficiency: high = active relative to size
+ * @property {"SPIKE" | "ELEVATED" | "NORMAL" | "LOW"} signal
+ */
 
-interface BridgeFlow {
-  protocol: string;
-  inflow_24h: number;
-  outflow_24h: number;
-  net_flow_24h: number;
-  flow_direction: "INFLOW" | "OUTFLOW" | "BALANCED";
-}
+/**
+ * @typedef {object} BridgeFlow
+ * @property {string} protocol
+ * @property {number} inflow_24h
+ * @property {number} outflow_24h
+ * @property {number} net_flow_24h
+ * @property {"INFLOW" | "OUTFLOW" | "BALANCED"} flow_direction
+ */
 
-interface LendingMetrics {
-  protocol: string;
-  total_borrowed: number;
-  total_supplied: number;
-  utilization_pct: number;
-  borrow_apy: number | null;
-  supply_apy: number | null;
-  utilization_signal: "OVERCROWDED" | "HEALTHY" | "UNDERUTILIZED";
-}
+/**
+ * @typedef {object} LendingMetrics
+ * @property {string} protocol
+ * @property {number} total_borrowed
+ * @property {number} total_supplied
+ * @property {number} utilization_pct
+ * @property {number | null} borrow_apy
+ * @property {number | null} supply_apy
+ * @property {"OVERCROWDED" | "HEALTHY" | "UNDERUTILIZED"} utilization_signal
+ */
 
-interface ChainVolumeSnapshot {
-  chain: string;
-  snapshot_at: string;
-  tvl_usd: number;
-  tvl_change_1d_pct: number | null;
-  tvl_change_7d_pct: number | null;
-  dex_volume_24h: number | null;
-  dex_volume_7d_avg: number | null;
-  dex_volume_ratio: number | null;
-  fee_revenue_24h: number | null;
-  volume_tvl_ratio: number | null;       // chain efficiency
-  stablecoin_circulating: number | null;
-  stablecoin_change_7d: number | null;
-  net_bridge_flow_24h: number | null;
-  bridge_direction: "INFLOW" | "OUTFLOW" | "BALANCED" | null;
-  vol_regime: "SPIKE" | "ELEVATED" | "NORMAL" | "QUIET";
-  chain_health: "GROWING" | "STABLE" | "CONTRACTING" | "STRESSED";
-  alerts: string[];
-}
+/**
+ * @typedef {object} ChainVolumeSnapshot
+ * @property {string} chain
+ * @property {string} snapshot_at
+ * @property {number} tvl_usd
+ * @property {number | null} tvl_change_1d_pct
+ * @property {number | null} tvl_change_7d_pct
+ * @property {number | null} dex_volume_24h
+ * @property {number | null} dex_volume_7d_avg
+ * @property {number | null} dex_volume_ratio
+ * @property {number | null} fee_revenue_24h
+ * @property {number | null} volume_tvl_ratio  chain efficiency
+ * @property {number | null} stablecoin_circulating
+ * @property {number | null} stablecoin_change_7d
+ * @property {number | null} net_bridge_flow_24h
+ * @property {"INFLOW" | "OUTFLOW" | "BALANCED" | null} bridge_direction
+ * @property {"SPIKE" | "ELEVATED" | "NORMAL" | "QUIET"} vol_regime
+ * @property {"GROWING" | "STABLE" | "CONTRACTING" | "STRESSED"} chain_health
+ * @property {string[]} alerts
+ */
 
-function classifyVolSignal(ratio: number | null): ProtocolVolume["signal"] {
+function classifyVolSignal(ratio) {
   if (ratio == null) return "NORMAL";
   if (ratio >= 2.5) return "SPIKE";
   if (ratio >= 1.4) return "ELEVATED";
@@ -4704,10 +4723,10 @@ function classifyVolSignal(ratio: number | null): ProtocolVolume["signal"] {
 }
 
 function classifyChainHealth(
-  tvlChange7d: number | null,
-  volRatio: number | null,
-  bridgeDir: string | null
-): ChainVolumeSnapshot["chain_health"] {
+  tvlChange7d,
+  volRatio,
+  bridgeDir
+) {
   const tvlGrowing = (tvlChange7d ?? 0) > 3;
   const tvlShrinking = (tvlChange7d ?? 0) < -5;
   const volHigh = (volRatio ?? 1) > 1.5;
@@ -4720,8 +4739,8 @@ function classifyChainHealth(
   return "STABLE";
 }
 
-function buildAlerts(snap: Partial<ChainVolumeSnapshot>, spikeThreshold: number): string[] {
-  const alerts: string[] = [];
+function buildAlerts(snap, spikeThreshold) {
+  const alerts = [];
 
   if ((snap.dex_volume_ratio ?? 0) >= spikeThreshold) {
     alerts.push(
@@ -4751,8 +4770,8 @@ function buildAlerts(snap: Partial<ChainVolumeSnapshot>, spikeThreshold: number)
 }
 
 export async function executeJob(
-  request: Record<string, any>
-): Promise<ExecuteJobResult> {
+  request
+) {
   const includeProtocols = request.include_protocols !== false;
   const includeBridge = request.include_bridge !== false;
   const includeLending = request.include_lending !== false;
@@ -4780,11 +4799,11 @@ export async function executeJob(
 
     // ── Chain TVL ──
     let fraxtalTvl = 0;
-    let tvlChange1d: number | null = null;
-    let tvlChange7d: number | null = null;
+    let tvlChange1d = null;
+    let tvlChange7d = null;
 
     if (chainRes.ok) {
-      const chains: any[] = await chainRes.json();
+      const chains = await chainRes.json();
       const fraxtal = chains.find(
         (c) => c.name?.toLowerCase() === "fraxtal"
       );
@@ -4796,10 +4815,10 @@ export async function executeJob(
     }
 
     // ── DEX Volume ──
-    let dexVol24h: number | null = null;
-    let dexVol7dAvg: number | null = null;
-    let dexVolRatio: number | null = null;
-    const protocolVolumes: ProtocolVolume[] = [];
+    let dexVol24h = null;
+    let dexVol7dAvg = null;
+    let dexVolRatio = null;
+    const protocolVolumes = [];
 
     if (dexRes.ok) {
       const dexData = await dexRes.json();
@@ -4809,7 +4828,7 @@ export async function executeJob(
       if (dexData.totalDataChart && dexData.totalDataChart.length >= 7) {
         const last7 = dexData.totalDataChart.slice(-7);
         const sum = last7.reduce(
-          (acc: number, d: [number, number]) => acc + (d[1] || 0),
+          (acc, d) => acc + (d[1] || 0),
           0
         );
         dexVol7dAvg = sum / 7;
@@ -4827,7 +4846,7 @@ export async function executeJob(
           const vol7avg =
             vol7arr.length > 0
               ? vol7arr.reduce(
-                  (s: number, d: [number, number]) => s + (d[1] || 0),
+                  (s, d) => s + (d[1] || 0),
                   0
                 ) / vol7arr.length
               : vol24;
@@ -4849,15 +4868,15 @@ export async function executeJob(
     }
 
     // ── Fee Revenue ──
-    let feeRevenue24h: number | null = null;
+    let feeRevenue24h = null;
     if (feesRes.ok) {
       const feesData = await feesRes.json();
       feeRevenue24h = feesData.total24h ?? null;
     }
 
     // ── Stablecoin (FRAX on Fraxtal) ──
-    let stableCirculating: number | null = null;
-    let stableChange7d: number | null = null;
+    let stableCirculating = null;
+    let stableChange7d = null;
 
     if (stableRes.ok) {
       const stableData = await stableRes.json();
@@ -4878,17 +4897,17 @@ export async function executeJob(
     }
 
     // ── Bridge Flows ──
-    const bridgeFlows: BridgeFlow[] = [];
-    let netBridgeFlow: number | null = null;
-    let bridgeDirection: ChainVolumeSnapshot["bridge_direction"] = null;
+    const bridgeFlows = [];
+    let netBridgeFlow = null;
+    let bridgeDirection = null;
 
     if (includeBridge && bridgeRes?.ok) {
       try {
         const bridgeData = await bridgeRes.json();
         const fraxtalBridges = (bridgeData.bridges || []).filter(
-          (b: any) =>
+          (b) =>
             (b.chains || [])
-              .map((c: string) => c.toLowerCase())
+              .map((c) => c.toLowerCase())
               .includes("fraxtal")
         );
 
@@ -4927,14 +4946,14 @@ export async function executeJob(
     }
 
     // ── Lending (Fraxlend) from protocols ──
-    const lendingMetrics: LendingMetrics[] = [];
+    const lendingMetrics = [];
     if (includeLending && protocolRes?.ok) {
       try {
-        const allProtos: any[] = await protocolRes.json();
+        const allProtos = await protocolRes.json();
         const fraxtalLending = allProtos.filter(
           (p) =>
             (p.chains || [])
-              .map((c: string) => c.toLowerCase())
+              .map((c) => c.toLowerCase())
               .includes("fraxtal") && p.category === "Lending"
         );
 
@@ -4968,7 +4987,7 @@ export async function executeJob(
         ? Math.round((dexVol24h / fraxtalTvl) * 10000) / 100
         : null;
 
-    const volRegime: ChainVolumeSnapshot["vol_regime"] =
+    const volRegime =
       (dexVolRatio ?? 1) >= 2.5
         ? "SPIKE"
         : (dexVolRatio ?? 1) >= 1.4
@@ -4983,7 +5002,7 @@ export async function executeJob(
       bridgeDirection
     );
 
-    const partialSnap: Partial<ChainVolumeSnapshot> = {
+    const partialSnap = {
       tvl_change_7d_pct: tvlChange7d,
       dex_volume_ratio: dexVolRatio,
       net_bridge_flow_24h: netBridgeFlow,
@@ -4993,7 +5012,7 @@ export async function executeJob(
 
     const alerts = buildAlerts(partialSnap, spikeThreshold);
 
-    const snapshot: ChainVolumeSnapshot = {
+    const snapshot = {
       chain: FRAXTAL_CHAIN,
       snapshot_at: new Date().toISOString(),
       tvl_usd: fraxtalTvl,
@@ -5033,7 +5052,7 @@ export async function executeJob(
         lending_metrics: lendingMetrics,
       }),
     };
-  } catch (e: any) {
+  } catch (e) {
     return {
       deliverable: JSON.stringify({
         schema: "tracking_fraxtal_volume",
@@ -5045,12 +5064,11 @@ export async function executeJob(
 }
 HANDLER_EOF
 
-cat > tracking-volume-handler.ts << 'HANDLER_EOF'
-import type { ExecuteJobResult } from "../../../runtime/offeringTypes.js";
+cat > tracking-volume-handler.js << 'HANDLER_EOF'
 
 /**
  * Seykota Agent Job: Tracking Volume Schema
- * cron: "*/15 * * * *"  — Every 15 minutes
+ * cron: "*\/15 * * * *"  — Every 15 minutes
  *
  * Tracks and scores trading volume across tokens, DEXes, and chains.
  * Volume is the single most reliable leading indicator for price moves —
@@ -5070,33 +5088,35 @@ const COINGECKO_BASE = "https://api.coingecko.com/api/v3";
 const DEFILLAMA_BASE = "https://api.llama.fi";
 const CG_KEY = process.env.COINGECKO_API_KEY || "";
 
-interface VolumeSnapshot {
-  token_id: string;
-  symbol: string;
-  name: string;
-  price_usd: number;
-  volume_24h: number;
-  volume_7d_avg: number;
-  volume_ratio: number;          // 24h vol / 7d avg — >2.0 = spike
-  volume_to_mcap: number;        // high = high turnover = momentum
-  price_change_24h: number;
-  price_change_7d: number;
-  volume_signal: "SPIKE" | "ELEVATED" | "NORMAL" | "DRY" | "DEAD";
-  vol_price_divergence: boolean; // volume up but price flat = accumulation
-  alert: boolean;
-}
+/**
+ * @typedef {object} VolumeSnapshot
+ * @property {string} token_id
+ * @property {string} symbol
+ * @property {string} name
+ * @property {number} price_usd
+ * @property {number} volume_24h
+ * @property {number} volume_7d_avg
+ * @property {number} volume_ratio  24h vol / 7d avg — >2.0 = spike
+ * @property {number} volume_to_mcap  high = high turnover = momentum
+ * @property {number} price_change_24h
+ * @property {number} price_change_7d
+ * @property {"SPIKE" | "ELEVATED" | "NORMAL" | "DRY" | "DEAD"} volume_signal
+ * @property {boolean} vol_price_divergence  volume up but price flat = accumulation
+ * @property {boolean} alert
+ */
 
-interface DexVolumeEntry {
-  protocol: string;
-  chain: string;
-  volume_24h: number;
-  volume_7d_avg: number;
-  volume_ratio: number;
-  tvl: number;
-  volume_tvl_ratio: number;      // high = protocol is active relative to size
-}
+/**
+ * @typedef {object} DexVolumeEntry
+ * @property {string} protocol
+ * @property {string} chain
+ * @property {number} volume_24h
+ * @property {number} volume_7d_avg
+ * @property {number} volume_ratio
+ * @property {number} tvl
+ * @property {number} volume_tvl_ratio  high = protocol is active relative to size
+ */
 
-function classifyVolumeSignal(ratio: number): VolumeSnapshot["volume_signal"] {
+function classifyVolumeSignal(ratio) {
   if (ratio >= 3.0) return "SPIKE";
   if (ratio >= 1.5) return "ELEVATED";
   if (ratio >= 0.5) return "NORMAL";
@@ -5105,17 +5125,17 @@ function classifyVolumeSignal(ratio: number): VolumeSnapshot["volume_signal"] {
 }
 
 function detectDivergence(
-  volRatio: number,
-  priceChange24h: number
-): boolean {
+  volRatio,
+  priceChange24h
+) {
   // Volume spike but price barely moved = accumulation or distribution
   return volRatio > 1.8 && Math.abs(priceChange24h) < 2;
 }
 
 export async function executeJob(
-  request: Record<string, any>
-): Promise<ExecuteJobResult> {
-  const tokenIds: string[] = request.tokens || [
+  request
+) {
+  const tokenIds = request.tokens || [
     "bitcoin",
     "ethereum",
     "solana",
@@ -5126,9 +5146,9 @@ export async function executeJob(
   ];
   const alertThreshold = Number(request.alert_threshold_pct || 200);
   const includeDex = request.include_dex !== false;
-  const filterChain: string = (request.chain || "").toLowerCase();
+  const filterChain = (request.chain || "").toLowerCase();
 
-  const cgHeaders: Record<string, string> = {
+  const cgHeaders = {
     ...(CG_KEY ? { "x-cg-demo-api-key": CG_KEY } : {}),
   };
 
@@ -5143,7 +5163,7 @@ export async function executeJob(
     const markets = marketRes.ok ? await marketRes.json() : [];
 
     // ── Build volume snapshots ──
-    const snapshots: VolumeSnapshot[] = markets.map((m: any) => {
+    const snapshots = markets.map((m) => {
       // Estimate 7d avg from available data (approximation without historical endpoint)
       // In production, store daily volumes and compute true 7d avg
       const vol24h = m.total_volume || 0;
@@ -5175,7 +5195,7 @@ export async function executeJob(
     });
 
     // ── Fetch DEX volume data from DeFiLlama ──
-    let dexVolumes: DexVolumeEntry[] = [];
+    let dexVolumes = [];
     if (includeDex) {
       try {
         const dexRes = await fetch(`${DEFILLAMA_BASE}/overview/dexs?excludeTotalDataChart=true&excludeTotalDataChartBreakdown=true&dataType=dailyVolume`);
@@ -5184,20 +5204,20 @@ export async function executeJob(
           const protocols = dexData.protocols || [];
 
           dexVolumes = protocols
-            .filter((p: any) => {
+            .filter((p) => {
               if (!filterChain) return true;
-              const chains: string[] = (p.chains || []).map((c: string) =>
+              const chains = (p.chains || []).map((c) =>
                 c.toLowerCase()
               );
               return chains.includes(filterChain);
             })
             .slice(0, 15)
-            .map((p: any) => {
+            .map((p) => {
               const vol24h = p.totalDataChart?.[p.totalDataChart?.length - 1]?.[1] || p.total24h || 0;
               const vol7dArr = p.totalDataChart?.slice(-7) || [];
               const vol7dAvg =
                 vol7dArr.length > 0
-                  ? vol7dArr.reduce((sum: number, d: any) => sum + (d[1] || 0), 0) /
+                  ? vol7dArr.reduce((sum, d) => sum + (d[1] || 0), 0) /
                     vol7dArr.length
                   : vol24h;
 
@@ -5211,7 +5231,7 @@ export async function executeJob(
                 volume_tvl_ratio: p.tvl > 0 ? (vol24h / p.tvl) * 100 : 0,
               };
             })
-            .sort((a: DexVolumeEntry, b: DexVolumeEntry) => b.volume_24h - a.volume_24h);
+            .sort((a, b) => b.volume_24h - a.volume_24h);
         }
       } catch (_) {
         // DEX data optional — don't fail the whole job
@@ -5254,7 +5274,7 @@ export async function executeJob(
         })),
       }),
     };
-  } catch (e: any) {
+  } catch (e) {
     return {
       deliverable: JSON.stringify({
         schema: "tracking_volume",
@@ -5267,12 +5287,11 @@ export async function executeJob(
 }
 HANDLER_EOF
 
-cat > trading-fee-percentage-handler.ts << 'HANDLER_EOF'
-import type { ExecuteJobResult } from "../../../runtime/offeringTypes.js";
+cat > trading-fee-percentage-handler.js << 'HANDLER_EOF'
 
 /**
  * Druckenmiller Agent Job: Trading Fee Percentage Schema
- * cron: "0 */2 * * *"  — Every 2 hours
+ * cron: "0 *\/2 * * *"  — Every 2 hours
  *
  * Fee percentage tracking across DEX protocols, LP pools, and chains.
  * Fees are the one honest signal in DeFi — they reflect real economic
@@ -5299,33 +5318,35 @@ import type { ExecuteJobResult } from "../../../runtime/offeringTypes.js";
 
 const DEFILLAMA_BASE = "https://api.llama.fi";
 
-type FeeRevisionSignal = "ACCELERATING" | "GROWING" | "STABLE" | "DECLINING" | "DEAD";
-type CapitalEfficiency = "EXCELLENT" | "GOOD" | "FAIR" | "POOR";
+/** @typedef {"ACCELERATING" | "GROWING" | "STABLE" | "DECLINING" | "DEAD"} FeeRevisionSignal */
+/** @typedef {"EXCELLENT" | "GOOD" | "FAIR" | "POOR"} CapitalEfficiency */
 
-interface ProtocolFeeProfile {
-  name: string;
-  chains: string[];
-  fee_revenue_24h: number;
-  fee_revenue_7d_avg: number;
-  fee_revision_pct: number;      // (24h - 7d_avg) / 7d_avg * 100
-  fee_revision_signal: FeeRevisionSignal;
-  tvl: number;
-  fee_to_tvl_ratio_pct: number;  // daily fee / TVL = capital efficiency
-  capital_efficiency: CapitalEfficiency;
-  annualized_fee_apr: number;    // fee_to_tvl * 365
-  druckenmiller_read: string;
-  is_revision_play: boolean;     // true if fee revenue inflecting positively
-}
+/**
+ * @typedef {object} ProtocolFeeProfile
+ * @property {string} name
+ * @property {string[]} chains
+ * @property {number} fee_revenue_24h
+ * @property {number} fee_revenue_7d_avg
+ * @property {number} fee_revision_pct  (24h - 7d_avg) / 7d_avg * 100
+ * @property {FeeRevisionSignal} fee_revision_signal
+ * @property {number} tvl
+ * @property {number} fee_to_tvl_ratio_pct  daily fee / TVL = capital efficiency
+ * @property {CapitalEfficiency} capital_efficiency
+ * @property {number} annualized_fee_apr  fee_to_tvl * 365
+ * @property {string} druckenmiller_read
+ * @property {boolean} is_revision_play  true if fee revenue inflecting positively
+ */
 
-interface FeeTierBreakdown {
-  tier: string;
-  description: string;
-  best_for: string;
-  expected_apr_range: string;
-  il_risk: "NONE" | "LOW" | "MEDIUM" | "HIGH";
-}
+/**
+ * @typedef {object} FeeTierBreakdown
+ * @property {string} tier
+ * @property {string} description
+ * @property {string} best_for
+ * @property {string} expected_apr_range
+ * @property {"NONE" | "LOW" | "MEDIUM" | "HIGH"} il_risk
+ */
 
-const FEE_TIERS: FeeTierBreakdown[] = [
+const FEE_TIERS = [
   {
     tier: "0.01%",
     description: "Ultra-low fee tier",
@@ -5356,7 +5377,7 @@ const FEE_TIERS: FeeTierBreakdown[] = [
   },
 ];
 
-function classifyRevision(current: number, avg: number): FeeRevisionSignal {
+function classifyRevision(current, avg) {
   if (avg <= 0) return "DEAD";
   const pct = ((current - avg) / avg) * 100;
   if (pct > 50) return "ACCELERATING";
@@ -5366,14 +5387,14 @@ function classifyRevision(current: number, avg: number): FeeRevisionSignal {
   return "DEAD";
 }
 
-function classifyEfficiency(feeToTvlPct: number): CapitalEfficiency {
+function classifyEfficiency(feeToTvlPct) {
   if (feeToTvlPct > 0.5) return "EXCELLENT";  // >0.5% daily = >180% annual
   if (feeToTvlPct > 0.15) return "GOOD";       // >0.15% daily = >55% annual
   if (feeToTvlPct > 0.05) return "FAIR";
   return "POOR";
 }
 
-function buildRead(name: string, signal: FeeRevisionSignal, efficiency: CapitalEfficiency, apr: number): string {
+function buildRead(name, signal, efficiency, apr) {
   if (signal === "ACCELERATING" && efficiency === "EXCELLENT")
     return `${name}: ACCELERATING fees with excellent capital efficiency (${apr.toFixed(0)}% APR). This is a positive earnings revision — be early to the LP position.`;
   if (signal === "ACCELERATING")
@@ -5387,9 +5408,9 @@ function buildRead(name: string, signal: FeeRevisionSignal, efficiency: CapitalE
   return `${name}: Fee revenue stable. ${apr.toFixed(0)}% APR. Monitor for revision in either direction.`;
 }
 
-export async function executeJob(request: Record<string, any>): Promise<ExecuteJobResult> {
-  const protocols: string[] = (request.protocols || []).map((p: string) => p.toLowerCase());
-  const chains: string[] = (request.chains || ["base", "ethereum"]).map((c: string) => c.toLowerCase());
+export async function executeJob(request) {
+  const protocols = (request.protocols || []).map((p) => p.toLowerCase());
+  const chains = (request.chains || ["base", "ethereum"]).map((c) => c.toLowerCase());
   const minFeeRevenue = Number(request.min_fee_revenue_24h || 5000);
   const includeLpApy = request.include_lp_apy !== false;
 
@@ -5405,8 +5426,8 @@ export async function executeJob(request: Record<string, any>): Promise<ExecuteJ
       globalFeeRes.ok ? globalFeeRes.json() : null,
     ]);
 
-    const feeProfiles: ProtocolFeeProfile[] = [];
-    const seenProtocols = new Set<string>();
+    const feeProfiles = [];
+    const seenProtocols = new Set();
 
     // Process chain-specific fees
     for (let i = 0; i < chains.length; i++) {
@@ -5421,7 +5442,7 @@ export async function executeJob(request: Record<string, any>): Promise<ExecuteJ
 
           seenProtocols.add(p.name);
           const fee24h = p.total24h || 0;
-          const chartData: [number, number][] = p.totalDataChart || [];
+          const chartData = p.totalDataChart || [];
           const last7 = chartData.slice(-7).map(d => d[1] || 0);
           const fee7dAvg = last7.length > 0 ? last7.reduce((s, v) => s + v, 0) / last7.length : fee24h;
           const revPct = fee7dAvg > 0 ? ((fee24h - fee7dAvg) / fee7dAvg) * 100 : 0;
@@ -5453,20 +5474,20 @@ export async function executeJob(request: Record<string, any>): Promise<ExecuteJ
     feeProfiles.sort((a, b) => b.fee_revenue_24h - a.fee_revenue_24h);
 
     // LP APY context from DeFiLlama pools
-    let topLpPools: any[] = [];
+    let topLpPools = [];
     if (includeLpApy) {
       try {
         const poolRes = await fetch(`${DEFILLAMA_BASE}/pools`);
         if (poolRes.ok) {
           const poolData = await poolRes.json();
           topLpPools = (poolData.data || [])
-            .filter((p: any) =>
+            .filter((p) =>
               chains.some(c => p.chain?.toLowerCase() === c) &&
               p.apyBase != null && p.apyBase > 0 && p.tvlUsd > 100_000
             )
-            .sort((a: any, b: any) => b.apyBase - a.apyBase)
+            .sort((a, b) => b.apyBase - a.apyBase)
             .slice(0, 10)
-            .map((p: any) => ({
+            .map((p) => ({
               pool: p.pool,
               protocol: p.project,
               chain: p.chain,
@@ -5516,9 +5537,8 @@ export async function executeJob(request: Record<string, any>): Promise<ExecuteJ
         })),
       }),
     };
-  } catch (e: any) {
+  } catch (e) {
     return { deliverable: JSON.stringify({ schema: "trading_fee_percentage", error: e.message }) };
   }
 }
 HANDLER_EOF
-
