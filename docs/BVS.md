@@ -1,6 +1,7 @@
-# BVS: the Bushido ve(3,3) flywheel
+# The Bushido ve(3,3) flywheel
 
-This page places this repository inside the wider Bushido system (BVS). It is a design overview written from the
+This page places this repository inside the wider Bushido system. **BVS** is the Bushido Virtue Score: the "Virtue" in
+step 3 below, which scales a voter's weight (capped at 2x). It is a design overview written from the
 owner's flywheel diagram (November 2026). **It describes the intended design, not a deployed system**: the status
 column says what exists today, and anything marked "planned" has no code here.
 
@@ -51,7 +52,7 @@ flowchart LR
 
 ## Where this repository sits
 
-| Part of BVS | What exists | Status |
+| Part of the flywheel | What exists | Status |
 |---|---|---|
 | 1. Traders and guardrails | The Bushido-dApp's swap tab (separate repository). In this repository: the swap orchestrator and its safety policy ([ORCHESTRATOR.md](ORCHESTRATOR.md)) | The dApp is live. The orchestrator produces **dry-run plans only**; live execution is not implemented |
 | 2. VirtueFeeRouter | A contract outside this repository | Mainnet deployment is the owner's to run; not verified from here |

@@ -9,7 +9,7 @@ macro agent, market trackers, and a swap orchestrator that combines the two agen
 > parse (checked in CI) but their data sources have not been exercised here. Anything that moves money, such as the
 > dip-buy and micro-swap examples, is reference material, not a finished product.
 
-This repository is one part of **BVS**, the Bushido ve(3,3) flywheel: see [docs/BVS.md](docs/BVS.md) for the whole system and
+This repository is one part of the Bushido ve(3,3) flywheel, which the Bushido Virtue Score (BVS) feeds into: see [docs/BVS.md](docs/BVS.md) for the whole system and
 where these handlers sit in it.
 
 ## Contents
