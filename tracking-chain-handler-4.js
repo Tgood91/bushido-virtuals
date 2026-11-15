@@ -1,4 +1,3 @@
-import type { ExecuteJobResult } from "../../../runtime/offeringTypes.js";
 
 /**
  * Seykota Agent Job: Tracking Chain Schema
@@ -20,38 +19,41 @@ import type { ExecuteJobResult } from "../../../runtime/offeringTypes.js";
 
 const DEFILLAMA_BASE = "https://api.llama.fi";
 
-interface ChainSnapshot {
-  name: string;
-  tvl: number;
-  tvl_change_1d: number | null;
-  tvl_change_7d: number | null;
-  tvl_momentum: "INFLOW" | "OUTFLOW" | "STABLE";
-  tvl_rank: number;
-  dex_volume_24h: number | null;
-  fee_revenue_24h: number | null;
-  protocol_count: number | null;
-  dominant_protocol: string | null;
-  stablecoin_tvl: number | null;
-  chain_signal: "ACCUMULATING" | "DISTRIBUTING" | "NEUTRAL" | "WATCH";
-  alert: string | null;
-}
+/**
+ * @typedef {object} ChainSnapshot
+ * @property {string} name
+ * @property {number} tvl
+ * @property {number | null} tvl_change_1d
+ * @property {number | null} tvl_change_7d
+ * @property {"INFLOW" | "OUTFLOW" | "STABLE"} tvl_momentum
+ * @property {number} tvl_rank
+ * @property {number | null} dex_volume_24h
+ * @property {number | null} fee_revenue_24h
+ * @property {number | null} protocol_count
+ * @property {string | null} dominant_protocol
+ * @property {number | null} stablecoin_tvl
+ * @property {"ACCUMULATING" | "DISTRIBUTING" | "NEUTRAL" | "WATCH"} chain_signal
+ * @property {string | null} alert
+ */
 
-interface ProtocolEntry {
-  name: string;
-  chain: string;
-  tvl: number;
-  tvl_change_7d: number | null;
-  category: string;
-}
+/**
+ * @typedef {object} ProtocolEntry
+ * @property {string} name
+ * @property {string} chain
+ * @property {number} tvl
+ * @property {number | null} tvl_change_7d
+ * @property {string} category
+ */
 
-interface StablecoinEntry {
-  chain: string;
-  total_circulating: number;
-  change_7d: number | null;
-  dominant_stable: string | null;
-}
+/**
+ * @typedef {object} StablecoinEntry
+ * @property {string} chain
+ * @property {number} total_circulating
+ * @property {number | null} change_7d
+ * @property {string | null} dominant_stable
+ */
 
-function classifyMomentum(change7d: number | null): ChainSnapshot["tvl_momentum"] {
+function classifyMomentum(change7d) {
   if (change7d == null) return "STABLE";
   if (change7d > 3) return "INFLOW";
   if (change7d < -3) return "OUTFLOW";
@@ -59,10 +61,10 @@ function classifyMomentum(change7d: number | null): ChainSnapshot["tvl_momentum"
 }
 
 function buildChainSignal(
-  tvlChange7d: number | null,
-  dexVol: number | null,
-  tvl: number
-): ChainSnapshot["chain_signal"] {
+  tvlChange7d,
+  dexVol,
+  tvl
+) {
   const momentum = classifyMomentum(tvlChange7d);
   const volTvl = tvl > 0 && dexVol != null ? (dexVol / tvl) * 100 : null;
 
@@ -76,7 +78,7 @@ function buildChainSignal(
   return "NEUTRAL";
 }
 
-function buildAlert(snap: Partial<ChainSnapshot>): string | null {
+function buildAlert(snap) {
   if ((snap.tvl_change_7d ?? 0) < -15)
     return `MAJOR OUTFLOW: TVL dropped ${Math.abs(snap.tvl_change_7d ?? 0).toFixed(1)}% in 7 days — capital rotation in progress`;
   if ((snap.tvl_change_7d ?? 0) > 20)
@@ -87,11 +89,11 @@ function buildAlert(snap: Partial<ChainSnapshot>): string | null {
 }
 
 export async function executeJob(
-  request: Record<string, any>
-): Promise<ExecuteJobResult> {
-  const chainNames: string[] = (
+  request
+) {
+  const chainNames = (
     request.chains || ["base", "ethereum", "solana", "avalanche", "arbitrum", "optimism", "sui", "near"]
-  ).map((c: string) => c.toLowerCase());
+  ).map((c) => c.toLowerCase());
 
   const includeProtocols = request.include_protocols !== false;
   const includeStablecoins = request.include_stablecoins !== false;
@@ -106,14 +108,14 @@ export async function executeJob(
       fetch(`${DEFILLAMA_BASE}/overview/fees?excludeTotalDataChart=true&excludeTotalDataChartBreakdown=true&dataType=dailyFees`),
     ]);
 
-    const allChains: any[] = chainRes.ok ? await chainRes.json() : [];
-    const allProtocols: any[] = protocolRes?.ok ? (await protocolRes.json()) : [];
-    const stableData: any = stableRes?.ok ? await stableRes.json() : null;
-    const dexData: any = dexRes.ok ? await dexRes.json() : null;
-    const feesData: any = feesRes.ok ? await feesRes.json() : null;
+    const allChains = chainRes.ok ? await chainRes.json() : [];
+    const allProtocols = protocolRes?.ok ? (await protocolRes.json()) : [];
+    const stableData = stableRes?.ok ? await stableRes.json() : null;
+    const dexData = dexRes.ok ? await dexRes.json() : null;
+    const feesData = feesRes.ok ? await feesRes.json() : null;
 
     // ── Build DEX volume map by chain ──
-    const dexVolumeByChain: Record<string, number> = {};
+    const dexVolumeByChain = {};
     if (dexData?.protocols) {
       for (const p of dexData.protocols) {
         for (const chain of (p.chains || [])) {
@@ -125,7 +127,7 @@ export async function executeJob(
     }
 
     // ── Build fee revenue map by chain ──
-    const feesByChain: Record<string, number> = {};
+    const feesByChain = {};
     if (feesData?.protocols) {
       for (const p of feesData.protocols) {
         for (const chain of (p.chains || [])) {
@@ -137,13 +139,13 @@ export async function executeJob(
     }
 
     // ── Build stablecoin map by chain ──
-    const stableByChain: Record<string, StablecoinEntry> = {};
+    const stableByChain = {};
     if (stableData?.peggedAssets) {
       for (const asset of stableData.peggedAssets) {
         const chains = asset.chainCirculating || {};
         for (const [chainName, circData] of Object.entries(chains)) {
           const key = chainName.toLowerCase();
-          const circ = (circData as any)?.current?.peggedUSD || 0;
+          const circ = (circData)?.current?.peggedUSD || 0;
           if (!stableByChain[key]) {
             stableByChain[key] = {
               chain: chainName,
@@ -159,13 +161,13 @@ export async function executeJob(
 
     // ── Sort chains by TVL globally for rank ──
     const sortedAllChains = [...allChains].sort((a, b) => (b.tvl || 0) - (a.tvl || 0));
-    const rankMap: Record<string, number> = {};
+    const rankMap = {};
     sortedAllChains.forEach((c, i) => {
       rankMap[c.name?.toLowerCase()] = i + 1;
     });
 
     // ── Build chain snapshots ──
-    const snapshots: ChainSnapshot[] = [];
+    const snapshots = [];
 
     for (const name of chainNames) {
       const chainData = allChains.find(
@@ -199,10 +201,10 @@ export async function executeJob(
 
       // Top protocol for this chain
       const chainProtos = allProtocols
-        .filter((p) => (p.chains || []).map((c: string) => c.toLowerCase()).includes(name))
+        .filter((p) => (p.chains || []).map((c) => c.toLowerCase()).includes(name))
         .sort((a, b) => (b.tvl || 0) - (a.tvl || 0));
 
-      const snap: ChainSnapshot = {
+      const snap = {
         name: chainData.name,
         tvl,
         tvl_change_1d: change1d != null ? Math.round(change1d * 10) / 10 : null,
@@ -224,11 +226,11 @@ export async function executeJob(
     }
 
     // ── Top protocols per chain ──
-    const topProtocols: ProtocolEntry[] = includeProtocols
+    const topProtocols = includeProtocols
       ? chainNames.flatMap((name) => {
           return allProtocols
             .filter((p) =>
-              (p.chains || []).map((c: string) => c.toLowerCase()).includes(name)
+              (p.chains || []).map((c) => c.toLowerCase()).includes(name)
             )
             .sort((a, b) => (b.tvl || 0) - (a.tvl || 0))
             .slice(0, 5)
@@ -286,7 +288,7 @@ export async function executeJob(
         })),
       }),
     };
-  } catch (e: any) {
+  } catch (e) {
     return {
       deliverable: JSON.stringify({
         schema: "tracking_chain",

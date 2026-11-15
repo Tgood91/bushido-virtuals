@@ -1,4 +1,3 @@
-import type { ExecuteJobResult } from "../../../runtime/offeringTypes.js";
 
 /**
  * Seykota Agent Job: Tracking Volume Schema
@@ -22,33 +21,35 @@ const COINGECKO_BASE = "https://api.coingecko.com/api/v3";
 const DEFILLAMA_BASE = "https://api.llama.fi";
 const CG_KEY = process.env.COINGECKO_API_KEY || "";
 
-interface VolumeSnapshot {
-  token_id: string;
-  symbol: string;
-  name: string;
-  price_usd: number;
-  volume_24h: number;
-  volume_7d_avg: number;
-  volume_ratio: number;          // 24h vol / 7d avg — >2.0 = spike
-  volume_to_mcap: number;        // high = high turnover = momentum
-  price_change_24h: number;
-  price_change_7d: number;
-  volume_signal: "SPIKE" | "ELEVATED" | "NORMAL" | "DRY" | "DEAD";
-  vol_price_divergence: boolean; // volume up but price flat = accumulation
-  alert: boolean;
-}
+/**
+ * @typedef {object} VolumeSnapshot
+ * @property {string} token_id
+ * @property {string} symbol
+ * @property {string} name
+ * @property {number} price_usd
+ * @property {number} volume_24h
+ * @property {number} volume_7d_avg
+ * @property {number} volume_ratio  24h vol / 7d avg — >2.0 = spike
+ * @property {number} volume_to_mcap  high = high turnover = momentum
+ * @property {number} price_change_24h
+ * @property {number} price_change_7d
+ * @property {"SPIKE" | "ELEVATED" | "NORMAL" | "DRY" | "DEAD"} volume_signal
+ * @property {boolean} vol_price_divergence  volume up but price flat = accumulation
+ * @property {boolean} alert
+ */
 
-interface DexVolumeEntry {
-  protocol: string;
-  chain: string;
-  volume_24h: number;
-  volume_7d_avg: number;
-  volume_ratio: number;
-  tvl: number;
-  volume_tvl_ratio: number;      // high = protocol is active relative to size
-}
+/**
+ * @typedef {object} DexVolumeEntry
+ * @property {string} protocol
+ * @property {string} chain
+ * @property {number} volume_24h
+ * @property {number} volume_7d_avg
+ * @property {number} volume_ratio
+ * @property {number} tvl
+ * @property {number} volume_tvl_ratio  high = protocol is active relative to size
+ */
 
-function classifyVolumeSignal(ratio: number): VolumeSnapshot["volume_signal"] {
+function classifyVolumeSignal(ratio) {
   if (ratio >= 3.0) return "SPIKE";
   if (ratio >= 1.5) return "ELEVATED";
   if (ratio >= 0.5) return "NORMAL";
@@ -57,17 +58,17 @@ function classifyVolumeSignal(ratio: number): VolumeSnapshot["volume_signal"] {
 }
 
 function detectDivergence(
-  volRatio: number,
-  priceChange24h: number
-): boolean {
+  volRatio,
+  priceChange24h
+) {
   // Volume spike but price barely moved = accumulation or distribution
   return volRatio > 1.8 && Math.abs(priceChange24h) < 2;
 }
 
 export async function executeJob(
-  request: Record<string, any>
-): Promise<ExecuteJobResult> {
-  const tokenIds: string[] = request.tokens || [
+  request
+) {
+  const tokenIds = request.tokens || [
     "bitcoin",
     "ethereum",
     "solana",
@@ -78,9 +79,9 @@ export async function executeJob(
   ];
   const alertThreshold = Number(request.alert_threshold_pct || 200);
   const includeDex = request.include_dex !== false;
-  const filterChain: string = (request.chain || "").toLowerCase();
+  const filterChain = (request.chain || "").toLowerCase();
 
-  const cgHeaders: Record<string, string> = {
+  const cgHeaders = {
     ...(CG_KEY ? { "x-cg-demo-api-key": CG_KEY } : {}),
   };
 
@@ -95,7 +96,7 @@ export async function executeJob(
     const markets = marketRes.ok ? await marketRes.json() : [];
 
     // ── Build volume snapshots ──
-    const snapshots: VolumeSnapshot[] = markets.map((m: any) => {
+    const snapshots = markets.map((m) => {
       // Estimate 7d avg from available data (approximation without historical endpoint)
       // In production, store daily volumes and compute true 7d avg
       const vol24h = m.total_volume || 0;
@@ -127,7 +128,7 @@ export async function executeJob(
     });
 
     // ── Fetch DEX volume data from DeFiLlama ──
-    let dexVolumes: DexVolumeEntry[] = [];
+    let dexVolumes = [];
     if (includeDex) {
       try {
         const dexRes = await fetch(`${DEFILLAMA_BASE}/overview/dexs?excludeTotalDataChart=true&excludeTotalDataChartBreakdown=true&dataType=dailyVolume`);
@@ -136,20 +137,20 @@ export async function executeJob(
           const protocols = dexData.protocols || [];
 
           dexVolumes = protocols
-            .filter((p: any) => {
+            .filter((p) => {
               if (!filterChain) return true;
-              const chains: string[] = (p.chains || []).map((c: string) =>
+              const chains = (p.chains || []).map((c) =>
                 c.toLowerCase()
               );
               return chains.includes(filterChain);
             })
             .slice(0, 15)
-            .map((p: any) => {
+            .map((p) => {
               const vol24h = p.totalDataChart?.[p.totalDataChart?.length - 1]?.[1] || p.total24h || 0;
               const vol7dArr = p.totalDataChart?.slice(-7) || [];
               const vol7dAvg =
                 vol7dArr.length > 0
-                  ? vol7dArr.reduce((sum: number, d: any) => sum + (d[1] || 0), 0) /
+                  ? vol7dArr.reduce((sum, d) => sum + (d[1] || 0), 0) /
                     vol7dArr.length
                   : vol24h;
 
@@ -163,7 +164,7 @@ export async function executeJob(
                 volume_tvl_ratio: p.tvl > 0 ? (vol24h / p.tvl) * 100 : 0,
               };
             })
-            .sort((a: DexVolumeEntry, b: DexVolumeEntry) => b.volume_24h - a.volume_24h);
+            .sort((a, b) => b.volume_24h - a.volume_24h);
         }
       } catch (_) {
         // DEX data optional — don't fail the whole job
@@ -206,7 +207,7 @@ export async function executeJob(
         })),
       }),
     };
-  } catch (e: any) {
+  } catch (e) {
     return {
       deliverable: JSON.stringify({
         schema: "tracking_volume",

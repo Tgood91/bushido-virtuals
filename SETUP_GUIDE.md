@@ -17,14 +17,14 @@ your-acp-agent/
 ├── handlers/
 │   └── virtuals-dip-buy.js          ← Copy main job file here
 ├── jobs/
-│   └── virtuals-dip-buy.config.ts   ← Copy config here
+│   └── virtuals-dip-buy.config.js   ← Copy config here
 └── .env                               ← Add required secrets
 ```
 
 **Copy these files:**
 ```bash
 cp virtuals-dip-buy.js your-acp-agent/handlers/
-cp virtuals-dip-buy.config.ts your-acp-agent/jobs/
+cp virtuals-dip-buy.config.js your-acp-agent/jobs/
 ```
 
 ---
@@ -95,7 +95,7 @@ Once dry-run looks good:
 DRY_RUN: false,  // ← Change from true to false
 ```
 
-### In `jobs/virtuals-dip-buy.config.ts`, ensure:
+### In `jobs/virtuals-dip-buy.config.js`, ensure:
 ```javascript
 enabled: true,  // ← Should be true
 ```
@@ -188,7 +188,7 @@ const CONFIG = {
 If something goes wrong:
 
 ### Option 1: Quick disable
-In `jobs/virtuals-dip-buy.config.ts`:
+In `jobs/virtuals-dip-buy.config.js`:
 ```javascript
 enabled: false,  // ← Disables job immediately
 ```

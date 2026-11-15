@@ -1,4 +1,3 @@
-import type { ExecuteJobResult } from "../../../runtime/offeringTypes.js";
 
 /**
  * Seykota Agent Job: Suggestions Schema
@@ -20,40 +19,41 @@ const COINGECKO_BASE = "https://api.coingecko.com/api/v3";
 const DEFILLAMA_BASE = "https://api.llama.fi";
 const CG_KEY = process.env.COINGECKO_API_KEY || "";
 
-type RiskTier = "normal" | "reduced" | "defensive" | "survival";
-type Context = "volatility" | "farming" | "l1" | "base" | "all";
+/** @typedef {"normal" | "reduced" | "defensive" | "survival"} RiskTier */
+/** @typedef {"volatility" | "farming" | "l1" | "base" | "all"} Context */
 
-interface Suggestion {
-  id: string;
-  priority: "HIGH" | "MEDIUM" | "LOW";
-  category: string;
-  action: string;
-  rationale: string;
-  signal: string;
-  risk_tier_min: RiskTier;
-  data_point?: string;
-}
+/**
+ * @typedef {object} Suggestion
+ * @property {string} id
+ * @property {"HIGH" | "MEDIUM" | "LOW"} priority
+ * @property {string} category
+ * @property {string} action
+ * @property {string} rationale
+ * @property {string} signal
+ * @property {RiskTier} risk_tier_min
+ * @property {string} [data_point]
+ */
 
-const RISK_ORDER: Record<RiskTier, number> = {
+const RISK_ORDER = {
   normal: 0,
   reduced: 1,
   defensive: 2,
   survival: 3,
 };
 
-function tierAllowed(jobTier: RiskTier, positionTier: RiskTier): boolean {
+function tierAllowed(jobTier, positionTier) {
   return RISK_ORDER[positionTier] <= RISK_ORDER[jobTier];
 }
 
 function buildSuggestions(
-  markets: any[],
-  tvlChains: any[],
-  context: Context,
-  riskTier: RiskTier,
-  equity: number,
-  activePositions: string[]
-): Suggestion[] {
-  const suggestions: Suggestion[] = [];
+  markets,
+  tvlChains,
+  context,
+  riskTier,
+  equity,
+  activePositions
+) {
+  const suggestions = [];
 
   // ── Vol regime signal from price momentum ──
   const eth = markets.find((m) => m.id === "ethereum");
@@ -195,16 +195,16 @@ function buildSuggestions(
 }
 
 export async function executeJob(
-  request: Record<string, any>
-): Promise<ExecuteJobResult> {
-  const context: Context =
-    (request.context as Context) || "all";
-  const riskTier: RiskTier =
-    (request.risk_tier as RiskTier) || "normal";
+  request
+) {
+  const context =
+    (request.context) || "all";
+  const riskTier =
+    (request.risk_tier) || "normal";
   const equity = Number(request.account_equity || 10000);
-  const activePositions: string[] = request.active_positions || [];
+  const activePositions = request.active_positions || [];
 
-  const cgHeaders: Record<string, string> = {
+  const cgHeaders = {
     "Content-Type": "application/json",
     ...(CG_KEY ? { "x-cg-demo-api-key": CG_KEY } : {}),
   };
@@ -253,7 +253,7 @@ export async function executeJob(
         suggestions,
       }),
     };
-  } catch (e: any) {
+  } catch (e) {
     return {
       deliverable: JSON.stringify({
         schema: "suggestions",

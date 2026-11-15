@@ -1,4 +1,3 @@
-import type { ExecuteJobResult } from "../../../runtime/offeringTypes.js";
 
 /**
  * Druckenmiller Agent Job: Soul Schema
@@ -72,16 +71,17 @@ import type { ExecuteJobResult } from "../../../runtime/offeringTypes.js";
 
 // ─── DRUCKENMILLER PRINCIPLES ────────────────────────────────────────────────
 
-interface Principle {
-  id: string;
-  name: string;
-  quote: string;
-  description: string;
-  audit_questions: string[];
-  failure_modes: string[];
-}
+/**
+ * @typedef {object} Principle
+ * @property {string} id
+ * @property {string} name
+ * @property {string} quote
+ * @property {string} description
+ * @property {string[]} audit_questions
+ * @property {string[]} failure_modes
+ */
 
-const DRUCKENMILLER_PRINCIPLES: Principle[] = [
+const DRUCKENMILLER_PRINCIPLES = [
   {
     id: "macro_first",
     name: "Macro Is the Prime Mover",
@@ -222,21 +222,22 @@ const DRUCKENMILLER_PRINCIPLES: Principle[] = [
 
 // ─── MACRO REGIME ENGINE ─────────────────────────────────────────────────────
 
-type MacroRegime = "RISK_ON_BULL" | "RISK_ON_FRAGILE" | "TRANSITIONAL" | "RISK_OFF_BEAR" | "CRISIS";
+/** @typedef {"RISK_ON_BULL" | "RISK_ON_FRAGILE" | "TRANSITIONAL" | "RISK_OFF_BEAR" | "CRISIS"} MacroRegime */
 
-interface MacroAssessment {
-  regime: MacroRegime;
-  regime_label: string;
-  liquidity_score: number;    // 0–10 (10 = abundant liquidity)
-  rate_headwind: boolean;
-  usd_risk: "TAILWIND" | "NEUTRAL" | "HEADWIND";
-  btc_macro_read: string;
-  positioning_bias: "AGGRESSIVE_LONG" | "MODERATE_LONG" | "NEUTRAL" | "MODERATE_SHORT" | "AGGRESSIVE_SHORT";
-  max_gross_exposure_pct: number;
-  druckenmiller_take: string;
-}
+/**
+ * @typedef {object} MacroAssessment
+ * @property {MacroRegime} regime
+ * @property {string} regime_label
+ * @property {number} liquidity_score  0–10 (10 = abundant liquidity)
+ * @property {boolean} rate_headwind
+ * @property {"TAILWIND" | "NEUTRAL" | "HEADWIND"} usd_risk
+ * @property {string} btc_macro_read
+ * @property {"AGGRESSIVE_LONG" | "MODERATE_LONG" | "NEUTRAL" | "MODERATE_SHORT" | "AGGRESSIVE_SHORT"} positioning_bias
+ * @property {number} max_gross_exposure_pct
+ * @property {string} druckenmiller_take
+ */
 
-function assessMacroRegime(macro: Record<string, any>): MacroAssessment {
+function assessMacroRegime(macro) {
   const fed = (macro.fed_stance || "neutral").toLowerCase();
   const curve = (macro.yield_curve || "flat").toLowerCase();
   const dxy = (macro.dxy_trend || "flat").toLowerCase();
@@ -253,7 +254,7 @@ function assessMacroRegime(macro: Record<string, any>): MacroAssessment {
   if (curve === "inverted") liquidityScore -= 1;
   liquidityScore = Math.max(0, Math.min(10, liquidityScore));
 
-  const regime: MacroRegime =
+  const regime =
     liquidityScore >= 8 && riskAppetite === "risk_on"
       ? "RISK_ON_BULL"
       : liquidityScore >= 6 && riskAppetite !== "risk_off"
@@ -264,7 +265,7 @@ function assessMacroRegime(macro: Record<string, any>): MacroAssessment {
       ? "RISK_OFF_BEAR"
       : "CRISIS";
 
-  const regimeLabels: Record<MacroRegime, string> = {
+  const regimeLabels = {
     RISK_ON_BULL: "Risk-On Bull — Maximum Offense",
     RISK_ON_FRAGILE: "Risk-On Fragile — Selective Offense",
     TRANSITIONAL: "Transitional — Reduce Exposure, Wait for Clarity",
@@ -272,7 +273,7 @@ function assessMacroRegime(macro: Record<string, any>): MacroAssessment {
     CRISIS: "Crisis — Capital Preservation Only",
   };
 
-  const positioning: MacroAssessment["positioning_bias"] =
+  const positioning =
     regime === "RISK_ON_BULL"
       ? "AGGRESSIVE_LONG"
       : regime === "RISK_ON_FRAGILE"
@@ -323,21 +324,22 @@ function assessMacroRegime(macro: Record<string, any>): MacroAssessment {
 
 // ─── POSITION AUDIT ──────────────────────────────────────────────────────────
 
-interface PositionAudit {
-  asset: string;
-  direction: string;
-  conviction: number;
-  reward_risk_ratio: number | null;
-  asymmetry_grade: "HOME_RUN" | "EXCELLENT" | "ACCEPTABLE" | "MARGINAL" | "REJECT";
-  size_vs_conviction: "UNDERSIZED" | "APPROPRIATE" | "OVERSIZED";
-  thesis_health: "INTACT" | "WEAKENING" | "BROKEN";
-  action: "ADD" | "HOLD" | "TRIM" | "EXIT_NOW";
-  days_held: number;
-  pnl_pct: number | null;
-  druckenmiller_verdict: string;
-}
+/**
+ * @typedef {object} PositionAudit
+ * @property {string} asset
+ * @property {string} direction
+ * @property {number} conviction
+ * @property {number | null} reward_risk_ratio
+ * @property {"HOME_RUN" | "EXCELLENT" | "ACCEPTABLE" | "MARGINAL" | "REJECT"} asymmetry_grade
+ * @property {"UNDERSIZED" | "APPROPRIATE" | "OVERSIZED"} size_vs_conviction
+ * @property {"INTACT" | "WEAKENING" | "BROKEN"} thesis_health
+ * @property {"ADD" | "HOLD" | "TRIM" | "EXIT_NOW"} action
+ * @property {number} days_held
+ * @property {number | null} pnl_pct
+ * @property {string} druckenmiller_verdict
+ */
 
-function auditPosition(pos: Record<string, any>, macroRegime: MacroRegime): PositionAudit {
+function auditPosition(pos, macroRegime) {
   const entry = Number(pos.entry_price || 0);
   const current = Number(pos.current_price || entry);
   const target = Number(pos.target_price || 0);
@@ -356,7 +358,7 @@ function auditPosition(pos: Record<string, any>, macroRegime: MacroRegime): Posi
       : null;
 
   // Reward/risk ratio
-  let rrRatio: number | null = null;
+  let rrRatio = null;
   if (entry > 0 && target > 0 && stop > 0) {
     const reward =
       direction === "long" ? target - current : current - target;
@@ -365,7 +367,7 @@ function auditPosition(pos: Record<string, any>, macroRegime: MacroRegime): Posi
     rrRatio = risk > 0 ? Math.round((reward / risk) * 10) / 10 : null;
   }
 
-  const asymmetryGrade: PositionAudit["asymmetry_grade"] =
+  const asymmetryGrade =
     rrRatio == null ? "ACCEPTABLE" :
     rrRatio >= 8 ? "HOME_RUN" :
     rrRatio >= 4 ? "EXCELLENT" :
@@ -379,20 +381,20 @@ function auditPosition(pos: Record<string, any>, macroRegime: MacroRegime): Posi
   const expectedMaxSize =
     conviction >= 8 ? 35 : conviction >= 5 ? 15 : 5;
 
-  const sizeVsConviction: PositionAudit["size_vs_conviction"] =
+  const sizeVsConviction =
     sizePct < expectedMinSize ? "UNDERSIZED" :
     sizePct > expectedMaxSize ? "OVERSIZED" :
     "APPROPRIATE";
 
   // Thesis health
-  const thesisHealth: PositionAudit["thesis_health"] =
+  const thesisHealth =
     !thesisIntact ? "BROKEN" :
     (macroRegime === "RISK_OFF_BEAR" || macroRegime === "CRISIS") && direction === "long" ? "WEAKENING" :
     (macroRegime === "RISK_ON_BULL") && direction === "short" ? "WEAKENING" :
     "INTACT";
 
   // Action
-  const action: PositionAudit["action"] =
+  const action =
     thesisHealth === "BROKEN" ? "EXIT_NOW" :
     asymmetryGrade === "REJECT" ? "EXIT_NOW" :
     thesisHealth === "INTACT" && conviction >= 8 && sizeVsConviction === "UNDERSIZED" ? "ADD" :
@@ -400,7 +402,7 @@ function auditPosition(pos: Record<string, any>, macroRegime: MacroRegime): Posi
     "HOLD";
 
   // Druckenmiller verdict
-  const verdicts: Record<PositionAudit["action"], string> = {
+  const verdicts = {
     ADD: `Conviction ${conviction}/10 with thesis intact and ${rrRatio?.toFixed(1) ?? "?"}:1 reward/risk. This is UNDERSIZED. Druckenmiller would press this position. Size up.`,
     HOLD: `Thesis intact. Reward/risk ${rrRatio?.toFixed(1) ?? "?"}:1. Hold and monitor for ADD opportunity on pullbacks.`,
     TRIM: `Thesis weakening — macro regime or fundamentals shifting against position. Trim to core size. Keep stop tight.`,
@@ -424,16 +426,17 @@ function auditPosition(pos: Record<string, any>, macroRegime: MacroRegime): Posi
 
 // ─── BEHAVIORAL AUDIT ────────────────────────────────────────────────────────
 
-interface BehaviorAudit {
-  score: number;           // 0–100
-  grade: "DRUCKENMILLER" | "DISCIPLINED" | "DEVELOPING" | "DRIFTING" | "AMATEUR";
-  flags: string[];
-  commendations: string[];
-}
+/**
+ * @typedef {object} BehaviorAudit
+ * @property {number} score  0–100
+ * @property {"DRUCKENMILLER" | "DISCIPLINED" | "DEVELOPING" | "DRIFTING" | "AMATEUR"} grade
+ * @property {string[]} flags
+ * @property {string[]} commendations
+ */
 
-function auditBehavior(request: Record<string, any>, positionAudits: PositionAudit[]): BehaviorAudit {
-  const flags: string[] = [];
-  const commendations: string[] = [];
+function auditBehavior(request, positionAudits) {
+  const flags = [];
+  const commendations = [];
   let score = 100;
 
   // Best idea sizing
@@ -452,7 +455,7 @@ function auditBehavior(request: Record<string, any>, positionAudits: PositionAud
   }
 
   // Recent decisions
-  const decisions: Array<{ decision: string; outcome: string }> = request.recent_decisions || [];
+  const decisions = request.recent_decisions || [];
   for (const d of decisions) {
     const dec = d.decision.toLowerCase();
     const out = d.outcome.toLowerCase();
@@ -489,7 +492,7 @@ function auditBehavior(request: Record<string, any>, positionAudits: PositionAud
 
   score = Math.max(0, score);
 
-  const grade: BehaviorAudit["grade"] =
+  const grade =
     score >= 90 ? "DRUCKENMILLER" :
     score >= 75 ? "DISCIPLINED" :
     score >= 55 ? "DEVELOPING" :
@@ -521,8 +524,8 @@ const DRUCKENMILLER_QUOTES = [
 // ─── MAIN ────────────────────────────────────────────────────────────────────
 
 export async function executeJob(
-  request: Record<string, any>
-): Promise<ExecuteJobResult> {
+  request
+) {
   const cycleNumber = Number(request.cycle_number || 1);
   const equity = Number(request.account_equity || 50000);
   const hwm = Number(request.high_water_mark || equity);
@@ -533,8 +536,8 @@ export async function executeJob(
   const macroAssessment = assessMacroRegime(macroInputs);
 
   // ── Position audits ──
-  const positions: Record<string, any>[] = request.positions || [];
-  const positionAudits: PositionAudit[] = positions.map((p) =>
+  const positions = request.positions || [];
+  const positionAudits = positions.map((p) =>
     auditPosition(p, macroAssessment.regime)
   );
 

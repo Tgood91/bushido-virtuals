@@ -74,7 +74,7 @@ your-acp-agent/
 │
 ├── jobs/
 │   ├── seykota-jobs.config.ts       (existing)
-│   └── virtuals-dip-buy.config.ts   ← Config (NEW)
+│   └── virtuals-dip-buy.config.js   ← Config (NEW)
 │
 ├── services/
 │   ├── hyperliquid.service.js       (existing)
@@ -266,7 +266,7 @@ Automatic 1 retry on failure with 5s delay
 ## Deployment Checklist
 
 - [ ] Copy `virtuals-dip-buy.js` to `handlers/`
-- [ ] Copy `virtuals-dip-buy.config.ts` to `jobs/`
+- [ ] Copy `virtuals-dip-buy.config.js` to `jobs/`
 - [ ] Add env vars to `.env` (see SETUP_GUIDE.md)
 - [ ] Run `node test-setup.js` to validate
 - [ ] Test in dry-run: `node handlers/virtuals-dip-buy.js`

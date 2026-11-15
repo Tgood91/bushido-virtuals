@@ -37,7 +37,7 @@ async function runChecks() {
   }
 
   // 2. Check config file exists
-  const configPath = path.join(process.cwd(), "jobs/virtuals-dip-buy.config.ts");
+  const configPath = path.join(process.cwd(), "jobs/virtuals-dip-buy.config.js");
   if (fs.existsSync(configPath)) {
     log("✓", "Config file found", configPath);
   } else {

@@ -4,8 +4,9 @@ Kept on hand while the orchestrator is developed on its own. Not part of the cur
 
 ## Plugging the handler into an ACP runtime
 
-Copy the handler together with `lib/` into the offering folder. The `../../../runtime/offeringTypes.js` import is type-only
-and is erased at run time. Node 22.18+ runs the `.ts` file directly.
+Copy the handler together with `lib/` into the offering folder. The handlers are plain JavaScript and no longer
+import `../../../runtime/offeringTypes.js` (it was type-only); if the runtime only loads `handlers.ts`, rename the file
+or re-export from one.
 
 A reasonable first offering is **signals only** (`dry_run: true`): it sells the alignment analysis without holding keys.
 

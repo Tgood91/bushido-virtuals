@@ -1,4 +1,3 @@
-import type { ExecuteJobResult } from "../../../runtime/offeringTypes.js";
 
 /**
  * Seykota Agent Job: Tracking Cross-Chain Schema
@@ -28,47 +27,51 @@ import type { ExecuteJobResult } from "../../../runtime/offeringTypes.js";
 
 const DEFILLAMA_BASE = "https://api.llama.fi";
 
-interface ChainFlowSummary {
-  chain: string;
-  tvl_usd: number;
-  tvl_change_1d_pct: number | null;
-  tvl_change_7d_pct: number | null;
-  tvl_momentum: "STRONG_INFLOW" | "INFLOW" | "STABLE" | "OUTFLOW" | "STRONG_OUTFLOW";
-  dex_volume_24h: number | null;
-  fee_revenue_24h: number | null;
-  bridge_inflow_24h: number | null;
-  bridge_outflow_24h: number | null;
-  bridge_net_flow_24h: number | null;
-  stablecoin_supply: number | null;
-  stablecoin_change_7d_pct: number | null;
-  capital_signal: "ACCUMULATE" | "HOLD" | "REDUCE" | "EXIT";
-  relative_rank: number;           // ranked by 7D TVL growth
-}
+/**
+ * @typedef {object} ChainFlowSummary
+ * @property {string} chain
+ * @property {number} tvl_usd
+ * @property {number | null} tvl_change_1d_pct
+ * @property {number | null} tvl_change_7d_pct
+ * @property {"STRONG_INFLOW" | "INFLOW" | "STABLE" | "OUTFLOW" | "STRONG_OUTFLOW"} tvl_momentum
+ * @property {number | null} dex_volume_24h
+ * @property {number | null} fee_revenue_24h
+ * @property {number | null} bridge_inflow_24h
+ * @property {number | null} bridge_outflow_24h
+ * @property {number | null} bridge_net_flow_24h
+ * @property {number | null} stablecoin_supply
+ * @property {number | null} stablecoin_change_7d_pct
+ * @property {"ACCUMULATE" | "HOLD" | "REDUCE" | "EXIT"} capital_signal
+ * @property {number} relative_rank  ranked by 7D TVL growth
+ */
 
-interface CrossChainFlow {
-  from_chain: string;
-  to_chain: string;
-  volume_24h: number;
-  bridge_name: string;
-}
+/**
+ * @typedef {object} CrossChainFlow
+ * @property {string} from_chain
+ * @property {string} to_chain
+ * @property {number} volume_24h
+ * @property {string} bridge_name
+ */
 
-interface YieldComparison {
-  chain: string;
-  best_stable_apy: number | null;
-  best_eth_lst_apy: number | null;
-  top_protocol: string | null;
-  yield_rank: number;
-}
+/**
+ * @typedef {object} YieldComparison
+ * @property {string} chain
+ * @property {number | null} best_stable_apy
+ * @property {number | null} best_eth_lst_apy
+ * @property {string | null} top_protocol
+ * @property {number} yield_rank
+ */
 
-interface RotationSignal {
-  type: "ROTATION" | "EXPANSION" | "CONTRACTION" | "CONSOLIDATION";
-  from_chain: string | null;
-  to_chain: string | null;
-  evidence: string;
-  confidence: "HIGH" | "MEDIUM" | "LOW";
-}
+/**
+ * @typedef {object} RotationSignal
+ * @property {"ROTATION" | "EXPANSION" | "CONTRACTION" | "CONSOLIDATION"} type
+ * @property {string | null} from_chain
+ * @property {string | null} to_chain
+ * @property {string} evidence
+ * @property {"HIGH" | "MEDIUM" | "LOW"} confidence
+ */
 
-function classifyMomentum(change7d: number | null): ChainFlowSummary["tvl_momentum"] {
+function classifyMomentum(change7d) {
   if (change7d == null) return "STABLE";
   if (change7d > 15) return "STRONG_INFLOW";
   if (change7d > 3) return "INFLOW";
@@ -78,10 +81,10 @@ function classifyMomentum(change7d: number | null): ChainFlowSummary["tvl_moment
 }
 
 function classifyCapitalSignal(
-  tvlChange7d: number | null,
-  bridgeNet: number | null,
-  stableChange: number | null
-): ChainFlowSummary["capital_signal"] {
+  tvlChange7d,
+  bridgeNet,
+  stableChange
+) {
   const tvlScore =
     (tvlChange7d ?? 0) > 10 ? 2 : (tvlChange7d ?? 0) > 3 ? 1 : (tvlChange7d ?? 0) < -10 ? -2 : (tvlChange7d ?? 0) < -3 ? -1 : 0;
   const bridgeScore =
@@ -98,8 +101,8 @@ function classifyCapitalSignal(
   return "EXIT";
 }
 
-function detectRotationSignals(chains: ChainFlowSummary[]): RotationSignal[] {
-  const signals: RotationSignal[] = [];
+function detectRotationSignals(chains) {
+  const signals = [];
   const sorted = [...chains].sort(
     (a, b) => (b.tvl_change_7d_pct ?? 0) - (a.tvl_change_7d_pct ?? 0)
   );
@@ -151,14 +154,14 @@ function detectRotationSignals(chains: ChainFlowSummary[]): RotationSignal[] {
 }
 
 export async function executeJob(
-  request: Record<string, any>
-): Promise<ExecuteJobResult> {
-  const chainNames: string[] = (
+  request
+) {
+  const chainNames = (
     request.chains || [
       "ethereum", "base", "fraxtal", "arbitrum", "optimism",
       "solana", "avalanche", "bsc", "sui", "near",
     ]
-  ).map((c: string) => c.toLowerCase());
+  ).map((c) => c.toLowerCase());
 
   const bridgeThreshold = Number(request.bridge_threshold_usd || 1_000_000);
   const alertNetFlow = Number(request.alert_net_flow_usd || 5_000_000);
@@ -186,9 +189,9 @@ export async function executeJob(
       ]);
 
     // ── Chain TVL map ──
-    const tvlMap: Record<string, { tvl: number; change1d: number | null; change7d: number | null }> = {};
+    const tvlMap = {};
     if (chainRes.ok) {
-      const chains: any[] = await chainRes.json();
+      const chains = await chainRes.json();
       for (const c of chains) {
         tvlMap[c.name?.toLowerCase()] = {
           tvl: c.tvl || 0,
@@ -199,7 +202,7 @@ export async function executeJob(
     }
 
     // ── DEX volume map by chain ──
-    const dexVolMap: Record<string, number> = {};
+    const dexVolMap = {};
     if (dexRes.ok) {
       const dexData = await dexRes.json();
       for (const p of dexData.protocols || []) {
@@ -213,7 +216,7 @@ export async function executeJob(
     }
 
     // ── Fee revenue map by chain ──
-    const feeMap: Record<string, number> = {};
+    const feeMap = {};
     if (feesRes.ok) {
       const feesData = await feesRes.json();
       for (const p of feesData.protocols || []) {
@@ -227,7 +230,7 @@ export async function executeJob(
     }
 
     // ── Stablecoin map by chain ──
-    const stableMap: Record<string, number> = {};
+    const stableMap = {};
     if (includeStable && stableRes?.ok) {
       const sd = await stableRes.json();
       for (const asset of sd.peggedAssets || []) {
@@ -235,20 +238,20 @@ export async function executeJob(
           asset.chainCirculating || {}
         )) {
           const key = chainName.toLowerCase();
-          const circ = (circData as any)?.current?.peggedUSD || 0;
+          const circ = (circData)?.current?.peggedUSD || 0;
           stableMap[key] = (stableMap[key] || 0) + circ;
         }
       }
     }
 
     // ── Bridge flows ──
-    const crossChainFlows: CrossChainFlow[] = [];
-    const bridgeNetByChain: Record<string, { in: number; out: number }> = {};
+    const crossChainFlows = [];
+    const bridgeNetByChain = {};
 
     if (bridgeRes.ok) {
       const bridgeData = await bridgeRes.json();
       for (const b of bridgeData.bridges || []) {
-        const bChains: string[] = (b.chains || []).map((c: string) =>
+        const bChains = (b.chains || []).map((c) =>
           c.toLowerCase()
         );
         const inflow = b.lastDayUsdTokenVolume || 0;
@@ -279,11 +282,11 @@ export async function executeJob(
     }
 
     // ── Yield comparison ──
-    const yieldMap: Record<string, YieldComparison> = {};
+    const yieldMap = {};
     if (includeYield && yieldRes?.ok) {
       try {
         const poolData = await yieldRes.json();
-        const pools: any[] = poolData.data || [];
+        const pools = poolData.data || [];
 
         for (const chain of chainNames) {
           const chainPools = pools
@@ -333,7 +336,7 @@ export async function executeJob(
     }
 
     // ── Build chain summaries ──
-    const chainSummaries: ChainFlowSummary[] = chainNames.map((name) => {
+    const chainSummaries = chainNames.map((name) => {
       const tvlData = tvlMap[name];
       const bridgeData = bridgeNetByChain[name];
       const bridgeNet = bridgeData
@@ -375,7 +378,7 @@ export async function executeJob(
     const rotationSignals = detectRotationSignals(chainSummaries);
 
     // ── Alerts ──
-    const alerts: string[] = [];
+    const alerts = [];
     for (const c of chainSummaries) {
       if (
         c.bridge_net_flow_24h != null &&
@@ -424,7 +427,7 @@ export async function executeJob(
           : [],
       }),
     };
-  } catch (e: any) {
+  } catch (e) {
     return {
       deliverable: JSON.stringify({
         schema: "tracking_cross_chain",

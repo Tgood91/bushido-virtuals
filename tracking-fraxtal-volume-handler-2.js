@@ -1,4 +1,3 @@
-import type { ExecuteJobResult } from "../../../runtime/offeringTypes.js";
 
 /**
  * Seykota Agent Job: Tracking Fraxtal Chain Volume Schema
@@ -27,56 +26,60 @@ import type { ExecuteJobResult } from "../../../runtime/offeringTypes.js";
 const DEFILLAMA_BASE = "https://api.llama.fi";
 const FRAXTAL_CHAIN = "Fraxtal";
 
-interface ProtocolVolume {
-  name: string;
-  category: string;
-  volume_24h: number;
-  volume_7d_avg: number;
-  volume_ratio: number;          // 24h / 7d avg
-  tvl: number;
-  volume_tvl_ratio: number;      // efficiency: high = active relative to size
-  signal: "SPIKE" | "ELEVATED" | "NORMAL" | "LOW";
-}
+/**
+ * @typedef {object} ProtocolVolume
+ * @property {string} name
+ * @property {string} category
+ * @property {number} volume_24h
+ * @property {number} volume_7d_avg
+ * @property {number} volume_ratio  24h / 7d avg
+ * @property {number} tvl
+ * @property {number} volume_tvl_ratio  efficiency: high = active relative to size
+ * @property {"SPIKE" | "ELEVATED" | "NORMAL" | "LOW"} signal
+ */
 
-interface BridgeFlow {
-  protocol: string;
-  inflow_24h: number;
-  outflow_24h: number;
-  net_flow_24h: number;
-  flow_direction: "INFLOW" | "OUTFLOW" | "BALANCED";
-}
+/**
+ * @typedef {object} BridgeFlow
+ * @property {string} protocol
+ * @property {number} inflow_24h
+ * @property {number} outflow_24h
+ * @property {number} net_flow_24h
+ * @property {"INFLOW" | "OUTFLOW" | "BALANCED"} flow_direction
+ */
 
-interface LendingMetrics {
-  protocol: string;
-  total_borrowed: number;
-  total_supplied: number;
-  utilization_pct: number;
-  borrow_apy: number | null;
-  supply_apy: number | null;
-  utilization_signal: "OVERCROWDED" | "HEALTHY" | "UNDERUTILIZED";
-}
+/**
+ * @typedef {object} LendingMetrics
+ * @property {string} protocol
+ * @property {number} total_borrowed
+ * @property {number} total_supplied
+ * @property {number} utilization_pct
+ * @property {number | null} borrow_apy
+ * @property {number | null} supply_apy
+ * @property {"OVERCROWDED" | "HEALTHY" | "UNDERUTILIZED"} utilization_signal
+ */
 
-interface ChainVolumeSnapshot {
-  chain: string;
-  snapshot_at: string;
-  tvl_usd: number;
-  tvl_change_1d_pct: number | null;
-  tvl_change_7d_pct: number | null;
-  dex_volume_24h: number | null;
-  dex_volume_7d_avg: number | null;
-  dex_volume_ratio: number | null;
-  fee_revenue_24h: number | null;
-  volume_tvl_ratio: number | null;       // chain efficiency
-  stablecoin_circulating: number | null;
-  stablecoin_change_7d: number | null;
-  net_bridge_flow_24h: number | null;
-  bridge_direction: "INFLOW" | "OUTFLOW" | "BALANCED" | null;
-  vol_regime: "SPIKE" | "ELEVATED" | "NORMAL" | "QUIET";
-  chain_health: "GROWING" | "STABLE" | "CONTRACTING" | "STRESSED";
-  alerts: string[];
-}
+/**
+ * @typedef {object} ChainVolumeSnapshot
+ * @property {string} chain
+ * @property {string} snapshot_at
+ * @property {number} tvl_usd
+ * @property {number | null} tvl_change_1d_pct
+ * @property {number | null} tvl_change_7d_pct
+ * @property {number | null} dex_volume_24h
+ * @property {number | null} dex_volume_7d_avg
+ * @property {number | null} dex_volume_ratio
+ * @property {number | null} fee_revenue_24h
+ * @property {number | null} volume_tvl_ratio  chain efficiency
+ * @property {number | null} stablecoin_circulating
+ * @property {number | null} stablecoin_change_7d
+ * @property {number | null} net_bridge_flow_24h
+ * @property {"INFLOW" | "OUTFLOW" | "BALANCED" | null} bridge_direction
+ * @property {"SPIKE" | "ELEVATED" | "NORMAL" | "QUIET"} vol_regime
+ * @property {"GROWING" | "STABLE" | "CONTRACTING" | "STRESSED"} chain_health
+ * @property {string[]} alerts
+ */
 
-function classifyVolSignal(ratio: number | null): ProtocolVolume["signal"] {
+function classifyVolSignal(ratio) {
   if (ratio == null) return "NORMAL";
   if (ratio >= 2.5) return "SPIKE";
   if (ratio >= 1.4) return "ELEVATED";
@@ -85,10 +88,10 @@ function classifyVolSignal(ratio: number | null): ProtocolVolume["signal"] {
 }
 
 function classifyChainHealth(
-  tvlChange7d: number | null,
-  volRatio: number | null,
-  bridgeDir: string | null
-): ChainVolumeSnapshot["chain_health"] {
+  tvlChange7d,
+  volRatio,
+  bridgeDir
+) {
   const tvlGrowing = (tvlChange7d ?? 0) > 3;
   const tvlShrinking = (tvlChange7d ?? 0) < -5;
   const volHigh = (volRatio ?? 1) > 1.5;
@@ -101,8 +104,8 @@ function classifyChainHealth(
   return "STABLE";
 }
 
-function buildAlerts(snap: Partial<ChainVolumeSnapshot>, spikeThreshold: number): string[] {
-  const alerts: string[] = [];
+function buildAlerts(snap, spikeThreshold) {
+  const alerts = [];
 
   if ((snap.dex_volume_ratio ?? 0) >= spikeThreshold) {
     alerts.push(
@@ -132,8 +135,8 @@ function buildAlerts(snap: Partial<ChainVolumeSnapshot>, spikeThreshold: number)
 }
 
 export async function executeJob(
-  request: Record<string, any>
-): Promise<ExecuteJobResult> {
+  request
+) {
   const includeProtocols = request.include_protocols !== false;
   const includeBridge = request.include_bridge !== false;
   const includeLending = request.include_lending !== false;
@@ -161,11 +164,11 @@ export async function executeJob(
 
     // ── Chain TVL ──
     let fraxtalTvl = 0;
-    let tvlChange1d: number | null = null;
-    let tvlChange7d: number | null = null;
+    let tvlChange1d = null;
+    let tvlChange7d = null;
 
     if (chainRes.ok) {
-      const chains: any[] = await chainRes.json();
+      const chains = await chainRes.json();
       const fraxtal = chains.find(
         (c) => c.name?.toLowerCase() === "fraxtal"
       );
@@ -177,10 +180,10 @@ export async function executeJob(
     }
 
     // ── DEX Volume ──
-    let dexVol24h: number | null = null;
-    let dexVol7dAvg: number | null = null;
-    let dexVolRatio: number | null = null;
-    const protocolVolumes: ProtocolVolume[] = [];
+    let dexVol24h = null;
+    let dexVol7dAvg = null;
+    let dexVolRatio = null;
+    const protocolVolumes = [];
 
     if (dexRes.ok) {
       const dexData = await dexRes.json();
@@ -190,7 +193,7 @@ export async function executeJob(
       if (dexData.totalDataChart && dexData.totalDataChart.length >= 7) {
         const last7 = dexData.totalDataChart.slice(-7);
         const sum = last7.reduce(
-          (acc: number, d: [number, number]) => acc + (d[1] || 0),
+          (acc, d) => acc + (d[1] || 0),
           0
         );
         dexVol7dAvg = sum / 7;
@@ -208,7 +211,7 @@ export async function executeJob(
           const vol7avg =
             vol7arr.length > 0
               ? vol7arr.reduce(
-                  (s: number, d: [number, number]) => s + (d[1] || 0),
+                  (s, d) => s + (d[1] || 0),
                   0
                 ) / vol7arr.length
               : vol24;
@@ -230,15 +233,15 @@ export async function executeJob(
     }
 
     // ── Fee Revenue ──
-    let feeRevenue24h: number | null = null;
+    let feeRevenue24h = null;
     if (feesRes.ok) {
       const feesData = await feesRes.json();
       feeRevenue24h = feesData.total24h ?? null;
     }
 
     // ── Stablecoin (FRAX on Fraxtal) ──
-    let stableCirculating: number | null = null;
-    let stableChange7d: number | null = null;
+    let stableCirculating = null;
+    let stableChange7d = null;
 
     if (stableRes.ok) {
       const stableData = await stableRes.json();
@@ -259,17 +262,17 @@ export async function executeJob(
     }
 
     // ── Bridge Flows ──
-    const bridgeFlows: BridgeFlow[] = [];
-    let netBridgeFlow: number | null = null;
-    let bridgeDirection: ChainVolumeSnapshot["bridge_direction"] = null;
+    const bridgeFlows = [];
+    let netBridgeFlow = null;
+    let bridgeDirection = null;
 
     if (includeBridge && bridgeRes?.ok) {
       try {
         const bridgeData = await bridgeRes.json();
         const fraxtalBridges = (bridgeData.bridges || []).filter(
-          (b: any) =>
+          (b) =>
             (b.chains || [])
-              .map((c: string) => c.toLowerCase())
+              .map((c) => c.toLowerCase())
               .includes("fraxtal")
         );
 
@@ -308,14 +311,14 @@ export async function executeJob(
     }
 
     // ── Lending (Fraxlend) from protocols ──
-    const lendingMetrics: LendingMetrics[] = [];
+    const lendingMetrics = [];
     if (includeLending && protocolRes?.ok) {
       try {
-        const allProtos: any[] = await protocolRes.json();
+        const allProtos = await protocolRes.json();
         const fraxtalLending = allProtos.filter(
           (p) =>
             (p.chains || [])
-              .map((c: string) => c.toLowerCase())
+              .map((c) => c.toLowerCase())
               .includes("fraxtal") && p.category === "Lending"
         );
 
@@ -349,7 +352,7 @@ export async function executeJob(
         ? Math.round((dexVol24h / fraxtalTvl) * 10000) / 100
         : null;
 
-    const volRegime: ChainVolumeSnapshot["vol_regime"] =
+    const volRegime =
       (dexVolRatio ?? 1) >= 2.5
         ? "SPIKE"
         : (dexVolRatio ?? 1) >= 1.4
@@ -364,7 +367,7 @@ export async function executeJob(
       bridgeDirection
     );
 
-    const partialSnap: Partial<ChainVolumeSnapshot> = {
+    const partialSnap = {
       tvl_change_7d_pct: tvlChange7d,
       dex_volume_ratio: dexVolRatio,
       net_bridge_flow_24h: netBridgeFlow,
@@ -374,7 +377,7 @@ export async function executeJob(
 
     const alerts = buildAlerts(partialSnap, spikeThreshold);
 
-    const snapshot: ChainVolumeSnapshot = {
+    const snapshot = {
       chain: FRAXTAL_CHAIN,
       snapshot_at: new Date().toISOString(),
       tvl_usd: fraxtalTvl,
@@ -414,7 +417,7 @@ export async function executeJob(
         lending_metrics: lendingMetrics,
       }),
     };
-  } catch (e: any) {
+  } catch (e) {
     return {
       deliverable: JSON.stringify({
         schema: "tracking_fraxtal_volume",
