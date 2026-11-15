@@ -4,10 +4,13 @@ Job handlers and supporting material for the Bushido trading agents: a Seykota-s
 macro agent, market trackers, and a swap orchestrator that combines the two agents' signals into a capped swap plan.
 
 > **Status in one paragraph.** The swap orchestrator is the only part with a safety layer and tests (`lib/`, `test/`,
-> 58 tests, CI). It can produce a **dry-run plan only**: live execution through a Coinbase CDP wallet is **not
-> implemented** and fails closed. The other handlers are market-data and persona jobs kept as they were written; they
+> 93 tests, CI). The execution state machine is built and tested with fake adapters, but the **concrete adapters (router quotes, wallet
+> signing) are not written**, so a live job still fails closed and only a **dry-run plan** is produced. The other handlers are market-data and persona jobs kept as they were written; they
 > parse (checked in CI) but their data sources have not been exercised here. Anything that moves money, such as the
 > dip-buy and micro-swap examples, is reference material, not a finished product.
+
+This repository is one part of the Bushido ve(3,3) flywheel, which the Bushido Virtue Score (BVS) feeds into: see [docs/BVS.md](docs/BVS.md) for the whole system and
+where these handlers sit in it.
 
 ## Contents
 
@@ -31,7 +34,7 @@ runner glob and the WebSocket check in `check:base` need it). `npm ci` installs 
 
 ```bash
 npm ci                                    # splits-sdk + viem
-npm test                                  # 58 tests, offline, a few seconds
+npm test                                  # 93 tests, offline, a few seconds
 npm run check:base                        # live, read-only: RPCs, WSS, contracts, sequencer
 node --input-type=module -e '
   const { executeJob } = await import("./swap-orchestrator-handler.js");
@@ -84,7 +87,7 @@ agent wins (risk management overrides the upside thesis). Agreement scores 50 pl
 (up to 15) and reward/risk (up to 10, with a penalty under 2:1), out of 100.
 
 **Statuses** in `swap_plans[]`: `DRY_RUN`, `ABORTED_NO_ALIGNMENT` (below the bar, or the amount fell to $0),
-`REJECTED` (asset not on the allowlist), `FAILED` (live execution requested), `EXECUTED` (reserved; nothing returns it today).
+`REJECTED` (asset not on the allowlist), `FAILED`, `PENDING` (broadcast, not yet confirmed), `EXECUTED` (confirmed on chain). Live runs return `FAILED` today: no adapters.
 
 ### Safety policy
 
@@ -204,6 +207,7 @@ Everything is read from the environment; nothing is read from a request.
 | `COINBASE_RPC`, `FALLBACK_RPC_1`, `FALLBACK_RPC_2` | Base RPC overrides | see above |
 | `TENDERLY_WSS` | real-time monitoring WebSocket | `wss://base.gateway.tenderly.co` |
 | `COINGECKO_API_KEY` | market-data handlers | none |
+| `ORCHESTRATOR_LIVE` | must be `true` to attempt live execution | off |
 | `CDP_API_KEY_NAME`, `CDP_API_KEY_PRIVATE_KEY`, `CDP_WALLET_ID` | future live execution | none |
 
 Keep keys in the environment of whatever runs the jobs. Never commit them, and never put a key in an RPC URL that you log.
@@ -222,6 +226,9 @@ a test. GitHub Actions runs the same command on Node 22 for every push and pull 
 |---|---|
 | `test/policy.test.js` | allowlist, clamps (a request can only tighten), daily cap and UTC rollover, failover stages |
 | `test/config.test.js` | router order and identities, RPC defaults and overrides, host-only logging, failover numbers |
+| `test/exec.test.js` | the execution state machine with fake adapters: simulate-before-sign, failover only before broadcast, one broadcast, cap enforced and recorded first, unknown outcomes |
+| `test/feed.test.js` | the DexScreener feed with a fake `fetch`: pair choice, either token side, time-bucketed series, trend and Seykota mapping, peg, liquidity and price-agreement checks |
+| `test/llama.test.js` | DefiLlama: fail-closed price cross-check, stale and low-confidence flags, yield filters and risk flags, caching and shared requests |
 | `test/orchestrator.test.js` | the handler end to end: hostile requests stay inside the caps, unlisted assets are rejected, live mode fails closed |
 | `test/chain-guards.test.js` | sequencer feed decoding (real Base data), grace period, RPC failover, contract addresses, WSS config |
 | `test/nodle.test.js` | micro-swap rules: bearish skip, stop condition, 3 a day, daily cap, allowlist |
@@ -234,6 +241,10 @@ a test. GitHub Actions runs the same command on Node 22 for every push and pull 
 swap-orchestrator-handler.js     the orchestrator
 lib/orchestrator-config.js       routers, RPCs, failover numbers, host-only logging
 lib/orchestrator-policy.js       limits, clamps, daily cap, failover rule
+lib/orchestrator-exec.js         execution state machine (adapters injected)
+lib/feeds/dexscreener.js         price feed, trend score, peg and liquidity checks (not yet wired into the handler)
+lib/feeds/defillama.js           referee prices and Base stable yields with risk flags (not yet wired)
+lib/orchestrator-live.js         concrete adapters: not written yet (returns null)
 lib/base-contracts.js            Base contract and token addresses, monitoring WSS
 lib/chain-guards.js              sequencer uptime pre-flight
 lib/nodle-micro-swaps.js         nodle_micro-swaps sub-function
@@ -257,8 +268,7 @@ the two oracle factories; any Splits SDK call against live data; the dip-buy and
 
 ## Roadmap
 
-1. Wire live execution behind the existing policy (quote, build, simulate, broadcast, track), consuming the daily cap on
-   success and using the failover numbers.
+1. Write the concrete adapters in `lib/orchestrator-live.js` (quotes per router, CDP signing, receipts) and try them on a fork and then with tiny amounts. The state machine around them is done.
 2. Durable storage for the daily cap.
 3. Pick one copy of each duplicate file and archive the rest.
 4. Plug the handlers into an ACP runtime ([docs/ACP.md](docs/ACP.md)); start with a signals-only offering.

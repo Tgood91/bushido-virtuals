@@ -1,4 +1,6 @@
-import { ROUTER_CONFIG, getRpcConfig, rpcHost } from "./lib/orchestrator-config.js";
+import { ROUTER_CONFIG, FAILOVER_POLICY, getRpcConfig, rpcHost } from "./lib/orchestrator-config.js";
+import { executeSwap } from "./lib/orchestrator-exec.js";
+import { createLiveAdapters } from "./lib/orchestrator-live.js";
 import {
   loadPolicy,
   clampMaxSwapPct,
@@ -61,7 +63,8 @@ import { BASE_CONTRACTS, getWssConfig } from "./lib/base-contracts.js";
  *   - Only assets on the server allowlist (ORCHESTRATOR_ALLOWED_ASSETS) are ever traded.
  *   - max_swap_pct can only LOWER the server ceiling; min_alignment_score can only RAISE the server floor.
  *   - Every swap is capped by an absolute USD ceiling and a daily cap, whatever equity or balance a request reports.
- *   - LIVE EXECUTION IS NOT WIRED in this repo: a live (non-dry-run) job fails closed instead of pretending to trade.
+ *   - Live execution needs ORCHESTRATOR_LIVE=true AND concrete adapters (lib/orchestrator-live.js, not written yet).
+ *     Without both, a live (non-dry-run) job fails closed instead of pretending to trade.
  */
 
 // Routers and RPC endpoints live in lib/orchestrator-config.js (verified router identities, working RPC defaults).
@@ -114,7 +117,7 @@ const CDP_WALLET_ID = process.env.CDP_WALLET_ID || "";
  * @property {string[]} router_attempted
  * @property {string | null} router_used
  * @property {string | null} rpc_used
- * @property {"PLANNED" | "EXECUTED" | "FAILED" | "ABORTED_NO_ALIGNMENT" | "REJECTED" | "DRY_RUN"} status
+ * @property {"PLANNED" | "EXECUTED" | "FAILED" | "ABORTED_NO_ALIGNMENT" | "REJECTED" | "DRY_RUN" | "PENDING"} status
  * @property {string | null} tx_hash
  * @property {string | null} error
  * @property {"nodle_micro_swaps"} [source]
@@ -247,6 +250,11 @@ async function executeSwapViaCDP(plan, dryRun) {
     return { ...plan, status: "DRY_RUN", router_used: ROUTER_CONFIG.primary.name, rpc_used: "primary" };
   }
 
+  // Live mode needs an explicit switch AND concrete adapters (lib/orchestrator-live.js). Missing either: fail closed.
+  if (process.env.ORCHESTRATOR_LIVE !== "true") {
+    return { ...plan, status: "FAILED", error: "Live execution is switched off (set ORCHESTRATOR_LIVE=true to enable). No trade was made." };
+  }
+
   if (!CDP_API_KEY_NAME || !CDP_API_KEY_PRIVATE_KEY || !CDP_WALLET_ID) {
     return {
       ...plan,
@@ -255,20 +263,24 @@ async function executeSwapViaCDP(plan, dryRun) {
     };
   }
 
-  // LIVE EXECUTION IS NOT IMPLEMENTED. This used to return status "EXECUTED" with a placeholder transaction hash
-  // whenever credentials were set, which told the buyer a swap had happened when nothing had. Fail closed instead.
-  //
-  // When wiring the real CDP / @coinbase/coinbase-sdk call, follow lib/orchestrator-policy.js `canFailOver`:
-  // fail over to the next router only BEFORE a transaction is broadcast (quote / build / simulate). After
-  // broadcast, keep tracking the original hash (re-sending the same signed transaction to another RPC is safe;
-  // building a new one through a different router could swap twice). Consume the daily cap on success.
-  return {
-    ...plan,
-    status: "FAILED",
-    error:
-      "Live execution is not implemented in this version, so no trade was made. " +
-      "Use dry_run: true for a plan, or wire the CDP swap call (see swap-orchestrator-handler.js) before going live.",
-  };
+  const live = createLiveAdapters(process.env);
+  if (!live) {
+    return {
+      ...plan,
+      status: "FAILED",
+      error: "Live execution adapters are not implemented (lib/orchestrator-live.js), so no trade was made. Use dry_run: true for a plan.",
+    };
+  }
+  // The state machine (lib/orchestrator-exec.js) owns the money rules: simulate before sign, failover only before
+  // broadcast, one broadcast, spend recorded before sending, keep tracking the original hash.
+  return executeSwap(plan, {
+    adapters: live.adapters,
+    usdPerToken: live.usdPerToken,
+    policy: loadPolicy(process.env),
+    cap: dailyCap,
+    routers: Object.entries(ROUTER_CONFIG).map(([role, r]) => ({ role, name: r.name })),
+    slippageBps: FAILOVER_POLICY.router.maxSlippageBps,
+  });
 }
 
 // ─── MAIN ────────────────────────────────────────────────────────────────────
@@ -376,7 +388,6 @@ export async function executeJob(request) {
         continue;
       }
       const executed = await executeSwapViaCDP(plan, dryRun);
-      if (executed.status === "EXECUTED") dailyCap.consume(executed.amount_usd);
       swapPlans.push(executed);
       continue;
     }
@@ -454,7 +465,6 @@ export async function executeJob(request) {
     };
 
     const executed = await executeSwapViaCDP(plan, dryRun);
-    if (executed.status === "EXECUTED") dailyCap.consume(executed.amount_usd);
     swapPlans.push(executed);
   }
 
@@ -494,6 +504,7 @@ export async function executeJob(request) {
 
   const executedSwaps = swapPlans.filter(p => p.status === "EXECUTED");
   const failedSwaps = swapPlans.filter(p => p.status === "FAILED");
+  const pendingSwaps = swapPlans.filter(p => p.status === "PENDING");
   const abortedSwaps = swapPlans.filter(p => p.status === "ABORTED_NO_ALIGNMENT");
   const rejectedSwaps = swapPlans.filter(p => p.status === "REJECTED");
   const noTradeAssets = alignments.filter(a => a.combined_action === "NO_TRADE");
@@ -529,6 +540,7 @@ export async function executeJob(request) {
       swap_plans: swapPlans,
       executed_count: executedSwaps.length,
       failed_count: failedSwaps.length,
+      pending_count: pendingSwaps.length,
       aborted_count: abortedSwaps.length,
       rejected_count: rejectedSwaps.length,
     }),
